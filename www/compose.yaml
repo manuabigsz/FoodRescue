@@ -1,0 +1,118 @@
+services:
+  php:
+    image: serversideup/php:8.5-fpm-nginx
+    container_name: food-rescue
+    restart: unless-stopped
+    networks:
+      - development
+    ports:
+      - "8080:8080"
+      - "8443:8443"
+    environment:
+      SSL_MODE: "mixed"
+      PHP_DATE_TIMEZONE: "America/Sao_Paulo"
+      PHP_MEMORY_LIMIT: "512M"
+      PHP_OPCACHE_ENABLE: "0"
+    volumes:
+      - /Volumes/Work/Docker/Volumes/FoodRescue/www:/var/www/html
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  queue:
+    image: serversideup/php:8.5-fpm-nginx
+    container_name: food-rescue-queue
+    restart: unless-stopped
+    working_dir: /var/www/html
+    command: php artisan queue:work --sleep=1 --tries=3 --timeout=90
+    networks:
+      - development
+    environment:
+      PHP_DATE_TIMEZONE: "America/Sao_Paulo"
+      PHP_MEMORY_LIMIT: "512M"
+    volumes:
+      - /Volumes/Work/Docker/Volumes/FoodRescue/www:/var/www/html
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'artisan queue:work' >/dev/null"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  scheduler:
+    image: serversideup/php:8.5-fpm-nginx
+    container_name: food-rescue-scheduler
+    restart: unless-stopped
+    working_dir: /var/www/html
+    command: php artisan schedule:work
+    networks:
+      - development
+    environment:
+      PHP_DATE_TIMEZONE: "America/Sao_Paulo"
+      PHP_MEMORY_LIMIT: "512M"
+    volumes:
+      - /Volumes/Work/Docker/Volumes/FoodRescue/www:/var/www/html
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f 'artisan schedule:work' >/dev/null"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:17-alpine
+    container_name: food-rescue-postgres
+    restart: unless-stopped
+    networks:
+      - development
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: food_rescue
+      POSTGRES_USER: agro
+      POSTGRES_PASSWORD: agro
+      TZ: America/Sao_Paulo
+    volumes:
+      - /Volumes/Work/Docker/Volumes/FoodRescue/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agro -d food_rescue"]
+      interval: 10s
+      retries: 5
+      timeout: 5s
+
+  node:
+    image: node:24-alpine
+    container_name: food-rescue-node
+    restart: unless-stopped
+    working_dir: /var/www/html
+    networks:
+      - development
+    ports:
+      - "5173:5173"
+    volumes:
+      - /Volumes/Work/Docker/Volumes/FoodRescue/www:/var/www/html
+      - /Volumes/Work/Docker/Volumes/FoodRescue/solana:/workspace
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
+
+  solana:
+    platform: linux/amd64
+    build:
+      context: .
+      dockerfile: docker/solana/Dockerfile
+    container_name: food-rescue-solana
+    working_dir: /workspace
+    networks:
+      - development
+    volumes:
+      - /Volumes/Work/Docker/Volumes/FoodRescue/solana:/workspace
+      - /Volumes/Work/Docker/Volumes/FoodRescue/solana-config:/root/.config/solana
+    entrypoint: ["/bin/bash", "-lc"]
+    command: ["sleep infinity"]
+
+networks:
+  development:
+    external: true

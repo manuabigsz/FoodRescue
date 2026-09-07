@@ -1,0 +1,59 @@
+# Environment files and local secrets
+**/.env
+**/.env.*
+!**/.env.example
+!**/.env.*.example
+!**/.env.frontend.example
+*.secret
+*.secrets
+*.token
+
+# Solana wallets, keypairs and local CLI configuration
+**/keypar/
+solana-config/cli/*.yml
+solana-config/cli/*.yaml
+**/*.pem
+**/*.key
+
+# Container data and local databases
+postgres/
+*.sql
+*.sql.gz
+*.dump
+
+# Dependencies and generated frontend/backend artifacts
+**/node_modules/
+**/vendor/
+**/public/build/
+**/public/hot
+**/public/fonts-manifest.dev.json
+**/storage/logs/
+**/storage/framework/cache/
+**/storage/framework/sessions/
+**/storage/framework/views/
+**/storage/framework/testing/
+**/storage/app/public/
+**/.phpunit.result.cache
+**/.phpunit.cache/
+
+# Local E2E checkpoints and temporary execution files
+**/*.local.json
+**/.tmp/
+**/tmp/
+
+# Local tooling and OS files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+.nova/
+.zed/
+.cursor/
+.phpactor.json
+*.swp
+*.swo
+
+# Local Docker overrides
+docker-compose.override.yml
+docker-compose.override.yaml
+compose.override.yaml

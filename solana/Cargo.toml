@@ -1,0 +1,15 @@
+[package]
+name = "foodrescue"
+version = "0.1.0"
+edition = "2021"
+description = "FoodRescue native Solana escrow program"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+
+[dependencies]
+solana-program = "2.2.0"
+spl-token = { version = "8.0.0", features = ["no-entrypoint"] }
+
+solana-system-interface = { version = "1.0", features = ["bincode"] }
+solana-sdk-ids = "2.2"

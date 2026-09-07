@@ -1,0 +1,1 @@
+/workspace/target/sbpf-solana-solana/release/foodrescue.so: /workspace/src/entrypoint.rs /workspace/src/error.rs /workspace/src/instruction.rs /workspace/src/lib.rs /workspace/src/processor.rs /workspace/src/state.rs
