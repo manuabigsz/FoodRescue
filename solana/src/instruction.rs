@@ -25,6 +25,7 @@ pub enum FoodRescueInstruction {
         carrier: Pubkey,
         metadata_hash: [u8; 32],
     },
+    ConfirmRescueProof,
 }
 
 impl FoodRescueInstruction {
@@ -51,6 +52,7 @@ impl FoodRescueInstruction {
             6 if rest.is_empty() => Ok(Self::MarkReadyForPickup),
             7 if rest.is_empty() => Ok(Self::ConfirmPickup),
             8 if rest.is_empty() => Ok(Self::MarkDelivered),
+            9 if rest.is_empty() => Ok(Self::ConfirmRescueProof),
             5 if rest.len() == 72 => {
                 let hash: [u8; 32] = rest
                     .get(40..72)

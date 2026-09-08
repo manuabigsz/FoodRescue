@@ -60,6 +60,8 @@ Route::post('trades/{trade}/blockchain/cancellation/prepare', [BlockchainTradeCo
 Route::post('trades/{trade}/blockchain/cancellation/confirm', [BlockchainTradeController::class, 'confirmCancellation'])->whereNumber('trade')->middleware('throttle:sensitive')->name('blockchain.cancellation.confirm');
 Route::post('trades/{trade}/rescue-proof/prepare', [RescueProofController::class, 'prepare'])->whereNumber('trade')->middleware('throttle:sensitive')->name('rescue.prepare');
 Route::post('trades/{trade}/rescue-proof/confirm', [RescueProofController::class, 'confirm'])->whereNumber('trade')->middleware('throttle:sensitive')->name('rescue.confirm');
+Route::post('trades/{trade}/rescue-proof/producer/prepare', [RescueProofController::class, 'prepareProducer'])->whereNumber('trade')->middleware('throttle:sensitive')->name('rescue.producer.prepare');
+Route::post('trades/{trade}/rescue-proof/producer/confirm', [RescueProofController::class, 'confirmProducer'])->whereNumber('trade')->middleware('throttle:sensitive')->name('rescue.producer.confirm');
 Route::get('trades/{trade}/rescue-proof', [RescueProofController::class, 'show'])->whereNumber('trade')->name('rescue.show');
 
 Route::get('trades/{trade}/blockchain', [BlockchainTradeController::class, 'show'])->whereNumber('trade')->name('blockchain.show');

@@ -172,11 +172,57 @@ pub struct RescueProofState {
     pub carrier: Pubkey,
     pub metadata_hash: [u8; 32],
     pub created_at: i64,
+    pub status: u8,
 }
 
 impl RescueProofState {
-    pub const VERSION: u8 = 1;
-    pub const LEN: usize = 146;
+    pub const VERSION: u8 = 2;
+    pub const LEN: usize = 147;
+
+    /// A NGO abriu a atestação; falta o produtor confirmar.
+    pub const STATUS_PENDING_PRODUCER: u8 = 0;
+
+    /// As duas partes atestaram; o resgate está completo.
+    pub const STATUS_CONFIRMED: u8 = 1;
+
+    pub fn unpack(input: &[u8]) -> Result<Self, ProgramError> {
+        if input.len() != Self::LEN {
+            return Err(FoodRescueError::InvalidState.into());
+        }
+        let mut offset = 0;
+        let version = input[offset];
+        offset += 1;
+        let bump = input[offset];
+        offset += 1;
+        let trade_id = take_u64(input, &mut offset)?;
+        let producer = take_pubkey(input, &mut offset)?;
+        let ngo = take_pubkey(input, &mut offset)?;
+        let carrier = take_pubkey(input, &mut offset)?;
+        let metadata_hash: [u8; 32] = input
+            .get(offset..offset + 32)
+            .ok_or(FoodRescueError::InvalidState)?
+            .try_into()
+            .map_err(|_| FoodRescueError::InvalidState)?;
+        offset += 32;
+        let created_at = take_i64(input, &mut offset)?;
+        let status = input[offset];
+
+        if version != Self::VERSION {
+            return Err(FoodRescueError::InvalidState.into());
+        }
+
+        Ok(Self {
+            version,
+            bump,
+            trade_id,
+            producer,
+            ngo,
+            carrier,
+            metadata_hash,
+            created_at,
+            status,
+        })
+    }
 
     pub fn pack(&self, output: &mut [u8]) -> Result<(), ProgramError> {
         if output.len() != Self::LEN {
@@ -193,6 +239,7 @@ impl RescueProofState {
         put(output, &mut offset, self.carrier.as_ref())?;
         put(output, &mut offset, &self.metadata_hash)?;
         put(output, &mut offset, &self.created_at.to_le_bytes())?;
+        output[offset] = self.status;
         Ok(())
     }
 }

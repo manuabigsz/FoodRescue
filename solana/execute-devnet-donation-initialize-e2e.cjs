@@ -29,13 +29,24 @@ async function request(path, method = 'GET', payload) {
   if (!response.ok) throw new Error(`${method} ${path} ${response.status}: ${JSON.stringify(body)}`);
   return body.data ?? body;
 }
+/**
+ * As seeds vêm autodescritas na preparação (`{ type, value }`), então o script
+ * não repete a regra de derivação — acompanha o backend e o programa sozinho.
+ */
+function seedBuffer(seed) {
+  if (seed.type === 'utf8') return Buffer.from(seed.value, 'utf8');
+  if (seed.type === 'base64') return Buffer.from(seed.value, 'base64');
+  if (seed.type === 'pubkey') return new PublicKey(seed.value).toBuffer();
+  throw new Error(`Tipo de semente não suportado na preparação: ${seed.type}`);
+}
+
 async function main() {
   const prepared = await request(`/trades/${tradeId}/blockchain/prepare`, 'POST');
   const find = (name) => prepared.initialize_instruction.accounts.find((item) => item.name === name);
   const key = (name) => new PublicKey(find(name).pubkey);
-  const idBytes = Buffer.alloc(8); idBytes.writeBigUInt64LE(BigInt(trade.trade_id));
-  const [tradePda] = PublicKey.findProgramAddressSync([Buffer.from('foodrescue_trade'), idBytes], programId);
-  const [vault] = PublicKey.findProgramAddressSync([Buffer.from('foodrescue_vault'), idBytes], programId);
+  const derive = (name) => PublicKey.findProgramAddressSync(prepared.pda_seeds[name].map(seedBuffer), programId)[0];
+  const tradePda = derive('trade');
+  const vault = derive('vault');
   const instruction = new TransactionInstruction({
     programId,
     keys: [

@@ -25,6 +25,9 @@ class EndToEndValidationTest extends TestCase
 
     private array $proof = [];
 
+    /** Status do Proof of Rescue on-chain: 0 antes do produtor, 1 depois. */
+    private int $proofStatus = 0;
+
     private int $chainStatus = 0;
 
     private int $tag = 0;
@@ -136,10 +139,22 @@ class EndToEndValidationTest extends TestCase
                 ->assertOk()->assertJsonPath('data.status', $donation ? 'proof_pending' : 'completed');
         }
         if ($donation) {
+            // A atestação é feita em duas transações: a NGO abre, o produtor fecha.
             $this->proof = $this->postEmptyJson($path.'/rescue-proof/prepare')->assertOk()->json('data');
             $this->tag = 5;
+            $this->proofStatus = 0;
             $this->postJson($path.'/rescue-proof/confirm', ['signature' => $this->signature(), 'proof_pda' => $this->address(87)])
-                ->assertCreated()->assertJsonPath('data.metadata_hash', $this->proof['metadata_hash']);
+                ->assertCreated()->assertJsonPath('data.awaiting_producer', true);
+            $this->assertDatabaseHas('trades', ['id' => $id, 'status' => 'proof_pending']);
+
+            $this->asActor($producer);
+            $this->postEmptyJson($path.'/rescue-proof/producer/prepare')->assertOk();
+            $this->tag = 9;
+            $this->proofStatus = 1;
+            $this->postJson($path.'/rescue-proof/producer/confirm', ['signature' => $this->signature()])
+                ->assertOk()->assertJsonPath('data.awaiting_producer', false)
+                ->assertJsonPath('data.metadata_hash', $this->proof['metadata_hash']);
+            $this->asActor($recipient);
         }
         $this->assertDatabaseHas('trades', ['id' => $id, 'status' => 'completed']);
         $this->assertDatabaseHas('surplus_lots', ['id' => $lotId, 'status' => $donation ? 'donated' : 'sold']);
@@ -203,8 +218,10 @@ class EndToEndValidationTest extends TestCase
             $method = $request->data()['method'];
             $p = $this->prepared;
             $proof = $this->proof;
-            $pda = $this->address($this->tag === 5 ? 87 : 85);
+            $pda = $this->address(in_array($this->tag, [5, 9], true) ? 87 : 85);
             $wallets = $this->tag === 5 ? $proof['wallets'] : ($p['wallets'] ?? []);
+            // A confirmação do produtor não devolve `wallets`; o signatário exigido
+            // é o produtor, que já está nas wallets da preparação do trade.
             $keys = array_map(fn ($wallet) => ['pubkey' => $wallet, 'signer' => true], array_values(array_filter($wallets)));
             $vaultIndex = count($keys);
             $keys[] = ['pubkey' => $this->address(86), 'signer' => false];
@@ -254,9 +271,9 @@ class EndToEndValidationTest extends TestCase
         }
         if ($address === $this->address(87)) {
             $p = $this->proof;
-            $raw = chr(1).chr(250).pack('P', $p['trade_id']).Base58::decode($p['wallets']['producer'])
+            $raw = chr(2).chr(250).pack('P', $p['trade_id']).Base58::decode($p['wallets']['producer'])
                 .Base58::decode($p['wallets']['ngo']).($p['wallets']['carrier'] ? Base58::decode($p['wallets']['carrier']) : str_repeat("\0", 32))
-                .hex2bin($p['metadata_hash']).pack('P', now()->timestamp);
+                .hex2bin($p['metadata_hash']).pack('P', now()->timestamp).chr($this->proofStatus);
         } else {
             $p = $this->prepared;
             $raw = chr(2).chr(254).chr(253).pack('P', $p['trade_id']).Base58::decode($p['wallets']['buyer'])

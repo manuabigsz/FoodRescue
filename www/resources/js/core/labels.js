@@ -60,7 +60,7 @@ export const nextActions = {
     ready_for_pickup: 'Lote liberado. A transportadora deve confirmar a coleta.',
     in_transit: 'Carga em trânsito. O destinatário confirma o recebimento na entrega.',
     delivered: 'Entrega confirmada. A liquidação encerra a operação.',
-    proof_pending: 'A organização beneficiária precisa emitir o Proof of Rescue.',
+    proof_pending: 'A organização beneficiária emite o Proof of Rescue e o produtor confirma a atestação.',
     completed: 'Operação concluída e liquidada on-chain.',
     cancelled: 'Operação cancelada.',
     expired: 'Operação expirada por falta de pagamento no prazo.',

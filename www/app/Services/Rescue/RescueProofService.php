@@ -22,7 +22,17 @@ class RescueProofService
 
     private const RESCUE_SEED = 'foodrescue_rescue';
 
-    private const STATE_SIZE = 146;
+    private const STATE_SIZE = 147;
+
+    private const STATE_VERSION = 2;
+
+    /** A NGO abriu a atestação; falta o produtor confirmar. */
+    private const STATUS_PENDING_PRODUCER = 0;
+
+    /** As duas partes atestaram. */
+    private const STATUS_CONFIRMED = 1;
+
+    private const CONFIRM_TAG = 9;
 
     public function __construct(
         private readonly SolanaRpcClient $rpc,
@@ -50,6 +60,9 @@ class RescueProofService
             .hex2bin($metadataHash);
 
         return [
+            'cluster' => (string) config('services.solana.cluster'),
+            'rpc_url' => (string) config('services.solana.rpc_url'),
+            'commitment' => (string) config('services.solana.commitment'),
             'program_id' => $protocol->program_id,
             'trade_id' => $trade->id,
             'proof_state_size' => self::STATE_SIZE,
@@ -59,18 +72,20 @@ class RescueProofService
                 'ngo' => $ngoWallet,
                 'producer' => $producerWallet,
                 'carrier' => $carrierWallet,
-                'protocol_authority' => $protocol->authority_wallet,
             ],
             'pda_seeds' => [
-                'rescue' => [self::RESCUE_SEED, base64_encode(pack('P', $trade->id))],
-                'encoding' => 'utf8_string_then_base64_u64_le',
+                'rescue' => [
+                    ['type' => 'utf8', 'value' => self::RESCUE_SEED],
+                    ['type' => 'base64', 'value' => base64_encode(pack('P', $trade->id))],
+                    ['type' => 'pubkey', 'value' => $ngoWallet],
+                    ['type' => 'pubkey', 'value' => $producerWallet],
+                ],
             ],
             'instruction' => [
                 'data_base64' => base64_encode($instruction),
                 'accounts' => [
                     ['name' => 'ngo', 'pubkey' => $ngoWallet, 'signer' => true, 'writable' => true],
-                    ['name' => 'producer', 'pubkey' => $producerWallet, 'signer' => true, 'writable' => false],
-                    ['name' => 'protocol_authority', 'pubkey' => $protocol->authority_wallet, 'signer' => true, 'writable' => false],
+                    ['name' => 'producer', 'pubkey' => $producerWallet, 'signer' => false, 'writable' => false],
                     ['name' => 'protocol_config', 'pubkey' => $protocol->config_pda, 'signer' => false, 'writable' => false],
                     ['name' => 'rescue_proof_pda', 'derived' => true, 'signer' => false, 'writable' => true],
                     ['name' => 'system_program', 'pubkey' => self::SYSTEM_PROGRAM, 'signer' => false, 'writable' => false],
@@ -87,11 +102,10 @@ class RescueProofService
                 ->with(['producer', 'buyer', 'surplusLot', 'shippingRequest.selectedOffer.carrier', 'rescueProof'])
                 ->firstOrFail();
             $prepared = $this->prepare($ngo, $locked);
-            $this->assertTransaction($data['signature'], $prepared['program_id'], $data['proof_pda'], [
+            $this->assertTransaction($data['signature'], $prepared['program_id'], $data['proof_pda'], 5, [
                 $prepared['wallets']['ngo'],
-                $prepared['wallets']['producer'],
             ]);
-            $state = $this->readProof($data['proof_pda'], $prepared);
+            $this->readProof($data['proof_pda'], $prepared, self::STATUS_PENDING_PRODUCER);
             $status = $this->rpcStatus($data['signature']);
 
             $proof = RescueProof::create([
@@ -105,16 +119,96 @@ class RescueProofService
                 'metadata' => $prepared['metadata'],
             ]);
 
-            if (in_array($locked->status, [TradeStatus::Delivered, TradeStatus::ProofPending], true)) {
+            // A doação só fecha com a atestação do produtor; até lá fica pendente.
+            if ($locked->status === TradeStatus::Delivered) {
                 $locked->update([
-                    'status' => TradeStatus::Completed,
-                    'completed_at' => now(),
+                    'status' => TradeStatus::ProofPending,
+                    'proof_pending_at' => now(),
                 ]);
-                $locked->surplusLot()->update(['status' => SurplusStatus::Donated]);
             }
 
             return $proof->load('trade');
         }, 3);
+    }
+
+    /**
+     * Segunda metade da atestação. O produtor assina sozinho, na própria
+     * carteira, uma transação que só confirma o proof que a NGO abriu.
+     *
+     * @return array<string,mixed>
+     */
+    public function prepareProducerConfirmation(User $producer, Trade $trade): array
+    {
+        $trade = $trade->loadMissing(['rescueProof']);
+        $proof = $this->assertCanConfirm($producer, $trade);
+
+        return [
+            'cluster' => (string) config('services.solana.cluster'),
+            'rpc_url' => (string) config('services.solana.rpc_url'),
+            'commitment' => (string) config('services.solana.commitment'),
+            'program_id' => $proof->program_id,
+            'trade_id' => $trade->id,
+            'proof_pda' => $proof->proof_pda,
+            'wallet' => $this->requiredWallet($producer, 'produtor'),
+            'instruction' => [
+                'data_base64' => base64_encode(chr(self::CONFIRM_TAG)),
+                'accounts' => [
+                    ['name' => 'producer', 'pubkey' => $this->requiredWallet($producer, 'produtor'), 'signer' => true, 'writable' => false],
+                    ['name' => 'rescue_proof_pda', 'pubkey' => $proof->proof_pda, 'signer' => false, 'writable' => true],
+                ],
+            ],
+        ];
+    }
+
+    /** @param array{signature:string} $data */
+    public function confirmProducerConfirmation(User $producer, Trade $trade, array $data): RescueProof
+    {
+        return DB::transaction(function () use ($producer, $trade, $data): RescueProof {
+            $locked = Trade::whereKey($trade->id)->lockForUpdate()
+                ->with(['producer', 'buyer', 'surplusLot', 'shippingRequest.selectedOffer.carrier', 'rescueProof'])
+                ->firstOrFail();
+            $proof = $this->assertCanConfirm($producer, $locked);
+
+            $this->assertTransaction($data['signature'], $proof->program_id, $proof->proof_pda, self::CONFIRM_TAG, [
+                $this->requiredWallet($producer, 'produtor'),
+            ]);
+            $this->readProof($proof->proof_pda, [
+                'program_id' => $proof->program_id,
+                'trade_id' => $locked->id,
+                'metadata_hash' => $proof->metadata_hash,
+                'wallets' => [
+                    'ngo' => $this->requiredWallet($locked->buyer, 'instituição social'),
+                    'producer' => $this->requiredWallet($locked->producer, 'produtor'),
+                    'carrier' => $locked->shippingRequest?->selectedOffer?->carrier?->solana_wallet_address,
+                ],
+            ], self::STATUS_CONFIRMED);
+            $status = $this->rpcStatus($data['signature']);
+
+            $proof->update([
+                'producer_signature' => $data['signature'],
+                'producer_confirmed_at' => now(),
+                'slot' => $status['slot'],
+            ]);
+
+            $locked->update([
+                'status' => TradeStatus::Completed,
+                'completed_at' => now(),
+            ]);
+            $locked->surplusLot()->update(['status' => SurplusStatus::Donated]);
+
+            return $proof->fresh()->load('trade');
+        }, 3);
+    }
+
+    private function assertCanConfirm(User $producer, Trade $trade): RescueProof
+    {
+        abort_unless($trade->is_donation, 409, 'Proof of Rescue só existe para operações de doação.');
+        abort_unless($trade->producer_id === $producer->id, 403);
+        $proof = $trade->rescueProof;
+        abort_if($proof === null, 409, 'A instituição social ainda não abriu o Proof of Rescue.');
+        abort_if($proof->producer_confirmed_at !== null, 409, 'O Proof of Rescue já foi confirmado pelo produtor.');
+
+        return $proof;
     }
 
     private function assertCanCreate(User $ngo, Trade $trade): void
@@ -154,16 +248,13 @@ class RescueProofService
         ];
     }
 
-    private function assertTransaction(string $signature, string $programId, string $proofPda, array $signers): void
+    private function assertTransaction(string $signature, string $programId, string $proofPda, int $tag, array $signers): void
     {
-        app(SolanaTransactionVerifier::class)->verify($signature, $programId, $proofPda, 5, [
-            ...$signers,
-            $this->protocol->official()->authority_wallet,
-        ]);
+        app(SolanaTransactionVerifier::class)->verify($signature, $programId, $proofPda, $tag, $signers);
     }
 
     /** @return array<string,mixed> */
-    private function readProof(string $proofPda, array $prepared): array
+    private function readProof(string $proofPda, array $prepared, int $expectedStatus): array
     {
         try {
             $account = $this->rpc->accountInfo($proofPda);
@@ -175,7 +266,7 @@ class RescueProofService
         abort_unless(is_string($encoded), 422, 'Estado do Proof of Rescue inválido.');
         $raw = base64_decode($encoded, true);
         abort_unless(is_string($raw) && strlen($raw) === self::STATE_SIZE, 422, 'Tamanho do Proof of Rescue inválido.');
-        abort_unless(ord($raw[0]) === 1, 422, 'Versão do Proof of Rescue inválida.');
+        abort_unless(ord($raw[0]) === self::STATE_VERSION, 422, 'Versão do Proof of Rescue inválida.');
         $tradeId = unpack('Pvalue', substr($raw, 2, 8))['value'] ?? null;
         abort_unless((int) $tradeId === (int) $prepared['trade_id'], 422, 'O Proof of Rescue referencia outro trade.');
         abort_unless(Base58::encode(substr($raw, 10, 32)) === $prepared['wallets']['producer'], 422, 'Produtor do Proof of Rescue divergente.');
@@ -188,6 +279,7 @@ class RescueProofService
             abort_unless($carrier === $expectedCarrier, 422, 'Carrier do Proof of Rescue divergente.');
         }
         abort_unless(bin2hex(substr($raw, 106, 32)) === $prepared['metadata_hash'], 422, 'Hash de metadados do Proof of Rescue divergente.');
+        abort_unless(ord($raw[146]) === $expectedStatus, 422, 'O Proof of Rescue on-chain não está no estado esperado.');
 
         return ['trade_id' => (int) $tradeId];
     }

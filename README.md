@@ -6,10 +6,10 @@ Marketplace que dá destino comercial ou social a excedentes agrícolas antes qu
 
 ```
 www/      aplicação Laravel: API em /api/v1 e front-end
-solana/   programa Solana em Rust + scripts que assinam as transações
+solana/   programa Solana em Rust + scripts de deploy e E2E
 ```
 
-São dois projetos independentes. O Laravel **prepara** as instruções on-chain, mas nunca assina: a assinatura vem da carteira do usuário ou dos scripts em `solana/`.
+São dois projetos independentes. O Laravel **prepara** as instruções on-chain e depois **confere** o resultado na cadeia, mas nunca assina — não guarda chave privada nenhuma. Quem assina é a carteira do próprio ator, pela extensão do navegador (Phantom ou compatível). Os scripts em `solana/` assinam com keypairs locais só no deploy e nos testes E2E.
 
 ## Atores
 

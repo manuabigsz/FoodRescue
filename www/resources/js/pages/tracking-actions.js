@@ -1,6 +1,14 @@
 import { api } from '../core/api.js';
 import { esc, formatDateTime, money, short } from '../core/format.js';
 import { currentRole } from '../core/session.js';
+import {
+    connectedWalletFor,
+    derivedAddress,
+    pendingCoSigners,
+    signAndSend,
+    walletAvailable,
+    walletErrorMessage,
+} from '../core/solana.js';
 import { state } from '../core/state.js';
 import { panelShell, toast } from '../core/ui.js';
 import { refreshTracking, selectedTradeId } from './tracking.js';
@@ -35,9 +43,9 @@ export function tradeActions(trade) {
 
     /**
      * Depois que a custódia existe on-chain, cada etapa de entrega precisa de uma
-     * transação assinada — o backend recusa a confirmação sem assinatura. Como a
-     * assinatura vive nos scripts de solana/, a tela explica o passo em vez de
-     * oferecer um botão que sempre falharia.
+     * transação assinada — o backend recusa a confirmação sem assinatura. A
+     * assinatura acontece na carteira do próprio ator, então a ação continua
+     * sendo um botão; só o painel por trás dele muda.
      */
     const signed = onChainEscrow(trade);
 
@@ -52,16 +60,22 @@ export function tradeActions(trade) {
         actions.push(['payment', 'Dados do pagamento', '']);
     }
     if (trade.status === 'funded' && producer) {
-        actions.push(signed ? ['onchain-ready', 'Como liberar para coleta', 'button-ghost'] : ['ready', 'Liberar para coleta', '']);
+        actions.push([signed ? 'onchain-ready' : 'ready', 'Liberar para coleta', '']);
     }
     if (trade.status === 'ready_for_pickup' && (carrier || (recipient && selfManagedShipping(trade)))) {
-        actions.push(signed ? ['onchain-pickup', 'Como confirmar a coleta', 'button-ghost'] : ['pickup', 'Confirmar coleta', '']);
+        actions.push([signed ? 'onchain-pickup' : 'pickup', 'Confirmar coleta', '']);
     }
     if (trade.status === 'in_transit' && recipient) {
-        actions.push(signed ? ['onchain-delivered', 'Como confirmar a entrega', 'button-ghost'] : ['delivered', 'Confirmar entrega', '']);
+        actions.push([signed ? 'onchain-delivered' : 'delivered', 'Confirmar entrega', '']);
     }
     if (trade.status === 'delivered' && signed && recipient) {
-        actions.push(['onchain-settlement', 'Como liquidar a operação', 'button-ghost']);
+        actions.push(['onchain-settlement', 'Liquidar a operação', '']);
+    }
+    if (trade.is_donation && recipient && !trade.rescue_proof && ['delivered', 'proof_pending'].includes(trade.status)) {
+        actions.push(['proof', 'Emitir Proof of Rescue', '']);
+    }
+    if (trade.is_donation && producer && trade.rescue_proof?.awaiting_producer) {
+        actions.push(['proof-producer', 'Confirmar Proof of Rescue', '']);
     }
     if (['delivered', 'proof_pending', 'completed'].includes(trade.status) && (recipient || producer)) {
         actions.push(['rating', 'Avaliar contraparte', 'button-ghost']);
@@ -109,10 +123,12 @@ export function openActionPanel(trade, action, keepOpen) {
         delivered: confirmationPanel('Confirmar a entrega', 'O destinatário declara que recebeu a carga. Em doações, o próximo passo é o Proof of Rescue.', '/delivery/delivered'),
         rating: ratingPanel,
         cancel: cancelPanel,
-        'onchain-ready': onChainPanel('Liberar para coleta', 'produtor', 'e2e:delivery'),
-        'onchain-pickup': onChainPanel('Confirmar a coleta', 'transportadora (ou destinatário, no transporte próprio)', 'e2e:delivery'),
-        'onchain-delivered': onChainPanel('Confirmar a entrega', 'destinatário', 'e2e:delivery'),
-        'onchain-settlement': onChainPanel('Liquidar a operação', 'destinatário', 'e2e:settlement'),
+        proof: proofPanel,
+        'proof-producer': proofProducerPanel,
+        'onchain-ready': deliveryPanel('Liberar para coleta', 'O produtor assina a transição da custódia para “Pronto para coleta”.', 'ready-for-pickup', 'produtor'),
+        'onchain-pickup': deliveryPanel('Confirmar a coleta', 'Registra a retirada da carga on-chain e move a operação para “Em trânsito”.', 'pickup', 'transportadora (ou destinatário, no transporte próprio)'),
+        'onchain-delivered': deliveryPanel('Confirmar a entrega', 'O destinatário assina o recebimento da carga. Em doações, o próximo passo é o Proof of Rescue.', 'delivered', 'destinatário'),
+        'onchain-settlement': settlementPanel,
     };
     (panels[action] || function () {})(trade, target);
 }
@@ -218,6 +234,81 @@ export async function quotesPanel(trade, target) {
     });
 }
 
+/**
+ * Executa uma sequência assinada, mostrando o andamento no próprio painel. O
+ * usuário precisa saber em qual das assinaturas está, porque a carteira abre um
+ * popup por transação e um erro no meio deixa a operação parcialmente aplicada.
+ */
+export async function runOnChain(target, run) {
+    const message = target.querySelector('[data-panel-message]');
+    const button = target.querySelector('[data-panel-confirm]');
+    if (button) button.disabled = true;
+    const progress = function (texto) { if (message) message.textContent = texto; };
+    progress('Abrindo a carteira…');
+    try {
+        await run(progress);
+        state.trackingPanel = null;
+        await refreshTracking(state.selectedTradeId);
+    } catch (error) {
+        progress(walletErrorMessage(error));
+        if (button) button.disabled = false;
+    }
+}
+
+function summaryGrid(rows) {
+    return '<div class="details-grid">' + rows.filter(function (row) { return Boolean(row[1]); }).map(function (row) {
+        return '<div class="detail"><small>' + esc(row[0]) + '</small><strong title="' + esc(String(row[1])) + '">' + esc(short(String(row[1]), 8, 6)) + '</strong></div>';
+    }).join('') + '</div>';
+}
+
+/**
+ * Painel de uma etapa que precisa de assinatura. Antes de oferecer o botão,
+ * confere se a carteira do ator dá conta da transação sozinha: instruções com
+ * mais de um signatário — como o cancelamento com escrow financiado, que exige
+ * comprador e produtor — não saem por uma extensão só, e é melhor dizer isso
+ * agora do que depois de o usuário assinar.
+ */
+export async function signaturePanel(target, options) {
+    const corpo = '<p>' + options.descricao + '</p>' + summaryGrid(options.resumo) + (options.extra || '');
+
+    if (!walletAvailable()) {
+        target.innerHTML = panelShell(options.titulo, corpo +
+            '<p class="footer-note">Nenhuma carteira Solana foi encontrada no navegador. Instale a Phantom, conecte a carteira cadastrada e recarregue a página para assinar esta etapa.</p>');
+
+        return;
+    }
+
+    let coSigners = [];
+    try {
+        coSigners = await pendingCoSigners(options.preparation, options.instruction, options.wallet);
+    } catch (error) {
+        target.innerHTML = panelShell(options.titulo, corpo + '<p class="footer-note">' + esc(error.message) + '</p>');
+
+        return;
+    }
+
+    if (coSigners.length) {
+        target.innerHTML = panelShell(options.titulo, corpo +
+            '<p class="footer-note">Esta transação exige também a assinatura de ' + esc(coSigners.map(function (item) {
+                return item.name + ' (' + short(item.pubkey, 6, 6) + ')';
+            }).join(', ')) + '. Uma carteira sozinha não consegue enviá-la pelo navegador.</p>');
+
+        return;
+    }
+
+    target.innerHTML = panelShell(options.titulo, corpo +
+        '<button class="button button-small" type="button" data-panel-confirm>' + esc(options.botao) + '</button>');
+
+    if (options.onRender) options.onRender(target);
+
+    target.querySelector('[data-panel-confirm]').addEventListener('click', function () {
+        runOnChain(target, async function (progress) {
+            const carteira = await connectedWalletFor(options.wallet, options.papel);
+            await options.run(progress, carteira);
+        });
+    });
+}
+
 export async function paymentPanel(trade, target) {
     target.innerHTML = panelShell('Pagamento em custódia', '<div class="skeleton" style="min-height:80px"></div>');
     let preparation;
@@ -229,28 +320,135 @@ export async function paymentPanel(trade, target) {
         return;
     }
 
-    const rows = [
-        ['Programa', preparation.program_id],
-        ['Mint FRUSD', preparation.mint],
-        ['Trade PDA', preparation.accounts_seeds?.trade || preparation.trade_pda],
-        ['Vault', preparation.accounts_seeds?.vault || preparation.vault_token_account],
-        ['Carteira pagadora', preparation.wallets?.buyer],
-    ].filter(function (row) { return Boolean(row[1]); });
+    /** A custódia pode já existir se o pagamento parou entre as duas assinaturas. */
+    const jaInicializado = onChainEscrow(trade);
+    const papel = trade.is_donation ? 'instituição social' : 'comprador';
 
-    target.innerHTML = panelShell(
-        'Pagamento em custódia',
-        '<p>O backend preparou a instrução, mas <strong>não assina a transação</strong>. A assinatura é feita pela carteira, com os scripts em <code>solana/</code> deste repositório.</p>' +
-        '<div class="details-grid">' + rows.map(function (row) {
-            return '<div class="detail"><small>' + esc(row[0]) + '</small><strong title="' + esc(row[1]) + '">' + esc(short(String(row[1]), 8, 6)) + '</strong></div>';
-        }).join('') + '</div>' +
-        '<p class="footer-note">Depois de enviar a transação, confirme com <code>POST /trades/' + trade.id + '/blockchain/funding/confirm</code> passando a assinatura. Só então o estado passa para “Pagamento em custódia”.</p>' +
-        '<button class="button button-ghost button-small" type="button" data-copy-preparation>Copiar dados da instrução</button>',
-    );
+    await signaturePanel(target, {
+        titulo: 'Pagamento em custódia',
+        descricao: 'O backend prepara a instrução e confere o resultado, mas <strong>não assina</strong>: quem assina é a sua carteira. ' +
+            (jaInicializado
+                ? 'A custódia já existe on-chain; falta transferir o valor para o cofre.'
+                : 'São duas assinaturas — a primeira cria a custódia on-chain, a segunda transfere o valor para o cofre.'),
+        preparation: preparation,
+        instruction: jaInicializado ? preparation.fund_instruction : preparation.initialize_instruction,
+        wallet: preparation.wallets?.buyer,
+        papel: papel,
+        botao: jaInicializado ? 'Assinar o pagamento' : 'Assinar e pagar',
+        resumo: [
+            ['Programa', preparation.program_id],
+            ['Mint FRUSD', preparation.mint],
+            ['Carteira pagadora', preparation.wallets?.buyer],
+            ['Produtor', preparation.wallets?.producer],
+            ['Transportadora', preparation.wallets?.carrier],
+        ],
+        extra: '<button class="button button-ghost button-small" type="button" data-copy-preparation>Copiar dados da instrução</button>',
+        onRender: function (node) {
+            node.querySelector('[data-copy-preparation]').addEventListener('click', function () {
+                navigator.clipboard?.writeText(JSON.stringify(preparation, null, 2))
+                    .then(function () { toast('Dados da instrução copiados.'); })
+                    .catch(function () { toast('Não foi possível copiar.', 'error'); });
+            });
+        },
+        run: async function (progress, carteira) {
+            if (!jaInicializado) {
+                progress('1 de 2 — confirme a criação da custódia na carteira…');
+                const signature = await signAndSend(preparation, preparation.initialize_instruction, carteira);
+                const tradePda = (await derivedAddress(preparation, 'trade_pda')).toBase58();
+                const vault = (await derivedAddress(preparation, 'vault_token_account')).toBase58();
+                progress('Custódia criada. Registrando no FoodRescue…');
+                await api('/trades/' + trade.id + '/blockchain/initialize/confirm', {
+                    method: 'POST',
+                    body: JSON.stringify({ signature: signature, trade_pda: tradePda, vault_token_account: vault }),
+                });
+            }
 
-    target.querySelector('[data-copy-preparation]').addEventListener('click', function () {
-        navigator.clipboard?.writeText(JSON.stringify(preparation, null, 2))
-            .then(function () { toast('Dados da instrução copiados.'); })
-            .catch(function () { toast('Não foi possível copiar.', 'error'); });
+            progress((jaInicializado ? '' : '2 de 2 — ') + 'confirme o pagamento na carteira…');
+            const funding = await signAndSend(preparation, preparation.fund_instruction, carteira);
+            progress('Pagamento enviado. Registrando no FoodRescue…');
+            await api('/trades/' + trade.id + '/blockchain/funding/confirm', {
+                method: 'POST',
+                body: JSON.stringify({ signature: funding }),
+            });
+        },
+    });
+}
+
+/** Etapas operacionais (coleta, trânsito, entrega): uma assinatura do ator da vez. */
+export function deliveryPanel(titulo, descricao, operacao, papel) {
+    return async function (trade, target) {
+        target.innerHTML = panelShell(titulo, '<div class="skeleton" style="min-height:60px"></div>');
+        let preparation;
+        try {
+            preparation = await api('/trades/' + trade.id + '/delivery/' + operacao + '/prepare', { method: 'POST', body: '{}' });
+        } catch (error) {
+            target.innerHTML = panelShell(titulo, '<p>Não foi possível preparar a instrução: ' + esc(error.message) + '</p>');
+
+            return;
+        }
+
+        await signaturePanel(target, {
+            titulo: titulo,
+            descricao: descricao + ' Quem assina: <strong>' + esc(papel) + '</strong>.',
+            preparation: preparation,
+            instruction: preparation.instruction,
+            wallet: preparation.wallet,
+            papel: papel,
+            botao: 'Assinar na carteira',
+            resumo: [
+                ['Programa', preparation.program_id],
+                ['Custódia', preparation.trade_pda],
+                ['Carteira que assina', preparation.wallet],
+            ],
+            run: async function (progress, carteira) {
+                progress('Confirme a transação na carteira…');
+                const signature = await signAndSend(preparation, preparation.instruction, carteira);
+                progress('Transação confirmada. Registrando no FoodRescue…');
+                await api('/trades/' + trade.id + '/delivery/' + operacao, {
+                    method: 'POST',
+                    body: JSON.stringify({ signature: signature }),
+                });
+            },
+        });
+    };
+}
+
+export async function settlementPanel(trade, target) {
+    const titulo = 'Liquidar a operação';
+    target.innerHTML = panelShell(titulo, '<div class="skeleton" style="min-height:80px"></div>');
+    let preparation;
+    try {
+        preparation = await api('/trades/' + trade.id + '/blockchain/settlement/prepare', { method: 'POST', body: '{}' });
+    } catch (error) {
+        target.innerHTML = panelShell(titulo, '<p>Não foi possível preparar a liquidação: ' + esc(error.message) + '</p>');
+
+        return;
+    }
+
+    await signaturePanel(target, {
+        titulo: titulo,
+        descricao: 'A assinatura do destinatário libera o cofre: o produtor recebe o valor do produto menos a taxa, a tesouraria recebe a taxa e a transportadora recebe o frete.',
+        preparation: preparation,
+        instruction: preparation.settle_instruction,
+        wallet: preparation.wallets?.buyer,
+        papel: trade.is_donation ? 'instituição social' : 'comprador',
+        botao: 'Assinar a liquidação',
+        resumo: [
+            ['Custódia', preparation.trade_pda],
+            ['Cofre', preparation.vault_token_account],
+            ['Produtor', preparation.wallets?.producer],
+            ['Tesouraria', preparation.wallets?.treasury],
+            ['Transportadora', preparation.wallets?.carrier],
+        ],
+        run: async function (progress, carteira) {
+            progress('Confirme a liquidação na carteira…');
+            const signature = await signAndSend(preparation, preparation.settle_instruction, carteira);
+            progress('Liquidação confirmada. Registrando no FoodRescue…');
+            await api('/trades/' + trade.id + '/blockchain/settlement/confirm', {
+                method: 'POST',
+                body: JSON.stringify({ signature: signature }),
+            });
+        },
     });
 }
 
@@ -290,6 +488,8 @@ export function ratingPanel(trade, target) {
 }
 
 export function cancelPanel(trade, target) {
+    if (onChainEscrow(trade)) return onChainCancelPanel(trade, target);
+
     target.innerHTML = panelShell(
         'Cancelar operação',
         '<p>O lote volta ao catálogo quando não houver pagamento em custódia. Operações já financiadas exigem o cancelamento on-chain, com estorno.</p>' +
@@ -306,17 +506,132 @@ export function cancelPanel(trade, target) {
 }
 
 /**
- * Etapa que exige transação assinada. Mostra quem assina e o comando exato, em
- * vez de um botão que o backend recusaria por falta de assinatura.
+ * Proof of Rescue, primeira metade: a instituição social abre a atestação. O
+ * produtor confirma depois, em transação própria — duas assinaturas na mesma
+ * transação não sobrevivem a dois atores assinando em momentos diferentes.
  */
-export function onChainPanel(titulo, quemAssina, script) {
-    return function (trade, target) {
-        target.innerHTML = panelShell(
-            titulo + ' — exige assinatura',
-            '<p>Esta operação tem custódia on-chain (<code>' + esc(short(trade.blockchain.trade_pda, 8, 6)) + '</code>), então o programa Solana precisa registrar a etapa. Quem assina: <strong>' + quemAssina + '</strong>.</p>' +
-            '<p class="footer-note">Na pasta <code>solana/</code>, com <code>TRADE_ID=' + trade.id + '</code> no ambiente:</p>' +
-            '<pre class="code-block">npm run ' + script + '</pre>' +
-            '<p class="footer-note">Assim que a transação for confirmada, o estado desta tela avança sozinho.</p>',
-        );
-    };
+export async function proofPanel(trade, target) {
+    const titulo = 'Emitir Proof of Rescue';
+    target.innerHTML = panelShell(titulo, '<div class="skeleton" style="min-height:80px"></div>');
+    let preparation;
+    try {
+        preparation = await api('/trades/' + trade.id + '/rescue-proof/prepare', { method: 'POST', body: '{}' });
+    } catch (error) {
+        target.innerHTML = panelShell(titulo, '<p>Não foi possível preparar a atestação: ' + esc(error.message) + '</p>');
+
+        return;
+    }
+
+    await signaturePanel(target, {
+        titulo: titulo,
+        descricao: 'A atestação registra on-chain o resgate deste lote, com o hash dos dados da doação. Depois da sua assinatura, o produtor confirma e a doação é concluída.',
+        preparation: preparation,
+        instruction: preparation.instruction,
+        wallet: preparation.wallets?.ngo,
+        papel: 'instituição social',
+        botao: 'Assinar a atestação',
+        resumo: [
+            ['Programa', preparation.program_id],
+            ['Hash dos dados', preparation.metadata_hash],
+            ['Produtor', preparation.wallets?.producer],
+            ['Transportadora', preparation.wallets?.carrier],
+        ],
+        run: async function (progress, carteira) {
+            progress('Confirme a atestação na carteira…');
+            const signature = await signAndSend(preparation, preparation.instruction, carteira);
+            const proofPda = (await derivedAddress(preparation, 'rescue_proof_pda')).toBase58();
+            progress('Atestação registrada. Avisando o FoodRescue…');
+            await api('/trades/' + trade.id + '/rescue-proof/confirm', {
+                method: 'POST',
+                body: JSON.stringify({ signature: signature, proof_pda: proofPda }),
+            });
+            toast('Proof of Rescue aberto. Falta a confirmação do produtor.');
+        },
+    });
+}
+
+/** Proof of Rescue, segunda metade: o produtor confirma o que a NGO abriu. */
+export async function proofProducerPanel(trade, target) {
+    const titulo = 'Confirmar Proof of Rescue';
+    target.innerHTML = panelShell(titulo, '<div class="skeleton" style="min-height:80px"></div>');
+    let preparation;
+    try {
+        preparation = await api('/trades/' + trade.id + '/rescue-proof/producer/prepare', { method: 'POST', body: '{}' });
+    } catch (error) {
+        target.innerHTML = panelShell(titulo, '<p>Não foi possível preparar a confirmação: ' + esc(error.message) + '</p>');
+
+        return;
+    }
+
+    await signaturePanel(target, {
+        titulo: titulo,
+        descricao: 'A instituição social já registrou a atestação on-chain. Sua assinatura fecha o Proof of Rescue e conclui a doação.',
+        preparation: preparation,
+        instruction: preparation.instruction,
+        wallet: preparation.wallet,
+        papel: 'produtor',
+        botao: 'Assinar a confirmação',
+        resumo: [
+            ['Programa', preparation.program_id],
+            ['Atestação', preparation.proof_pda],
+            ['Carteira que assina', preparation.wallet],
+        ],
+        run: async function (progress, carteira) {
+            progress('Confirme a atestação na carteira…');
+            const signature = await signAndSend(preparation, preparation.instruction, carteira);
+            progress('Confirmação registrada. Concluindo a doação…');
+            await api('/trades/' + trade.id + '/rescue-proof/producer/confirm', {
+                method: 'POST',
+                body: JSON.stringify({ signature: signature }),
+            });
+            toast('Proof of Rescue concluído.');
+        },
+    });
+}
+
+/**
+ * Cancelamento com custódia on-chain: devolve o saldo do cofre ao pagador. Com
+ * o escrow já financiado o programa exige as assinaturas do comprador e do
+ * produtor na mesma transação, então o painel avisa em vez de tentar enviar.
+ */
+export async function onChainCancelPanel(trade, target) {
+    const titulo = 'Cancelar operação';
+    target.innerHTML = panelShell(titulo, '<div class="skeleton" style="min-height:80px"></div>');
+    let preparation;
+    try {
+        preparation = await api('/trades/' + trade.id + '/blockchain/cancellation/prepare', { method: 'POST', body: '{}' });
+    } catch (error) {
+        target.innerHTML = panelShell(titulo, '<p>Não foi possível preparar o cancelamento: ' + esc(error.message) + '</p>');
+
+        return;
+    }
+
+    await signaturePanel(target, {
+        titulo: titulo,
+        descricao: preparation.was_funded
+            ? 'O escrow está financiado: o cancelamento estorna todo o saldo do cofre ao pagador e exige a assinatura do comprador e do produtor na mesma transação.'
+            : 'A custódia existe mas ainda não foi financiada. O cancelamento fecha a operação on-chain e libera o lote.',
+        preparation: preparation,
+        instruction: preparation.cancel_instruction,
+        wallet: preparation.wallets?.actor,
+        papel: 'participante desta operação',
+        botao: 'Assinar o cancelamento',
+        resumo: [
+            ['Custódia', preparation.trade_pda],
+            ['Cofre', preparation.vault_token_account],
+            ['Estorno', preparation.amounts?.refund],
+            ['Carteira que assina', preparation.wallets?.actor],
+        ],
+        extra: '<div class="field"><label for="cancel-reason">Motivo (opcional)</label><input id="cancel-reason" name="reason" maxlength="500"></div>',
+        run: async function (progress, carteira) {
+            const reason = target.querySelector('#cancel-reason')?.value;
+            progress('Confirme o cancelamento na carteira…');
+            const signature = await signAndSend(preparation, preparation.cancel_instruction, carteira);
+            progress('Cancelamento confirmado. Registrando no FoodRescue…');
+            await api('/trades/' + trade.id + '/blockchain/cancellation/confirm', {
+                method: 'POST',
+                body: JSON.stringify(reason ? { signature: signature, reason: reason } : { signature: signature }),
+            });
+        },
+    });
 }

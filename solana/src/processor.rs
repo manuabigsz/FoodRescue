@@ -86,6 +86,9 @@ impl Processor {
                 carrier,
                 metadata_hash,
             } => Self::create_rescue_proof(program_id, accounts, trade_id, carrier, metadata_hash),
+            FoodRescueInstruction::ConfirmRescueProof => {
+                Self::confirm_rescue_proof(program_id, accounts)
+            }
         }
     }
 
@@ -193,10 +196,14 @@ impl Processor {
         }
 
         let trade_id_bytes = trade_id.to_le_bytes();
-        let (expected_trade, trade_bump) =
-            Pubkey::find_program_address(&[Self::TRADE_SEED, &trade_id_bytes], program_id);
-        let (expected_vault, vault_bump) =
-            Pubkey::find_program_address(&[Self::VAULT_SEED, &trade_id_bytes], program_id);
+        let (expected_trade, trade_bump) = Pubkey::find_program_address(
+            &[Self::TRADE_SEED, &trade_id_bytes, buyer.key.as_ref()],
+            program_id,
+        );
+        let (expected_vault, vault_bump) = Pubkey::find_program_address(
+            &[Self::VAULT_SEED, &trade_id_bytes, buyer.key.as_ref()],
+            program_id,
+        );
         if trade_pda.key != &expected_trade || vault.key != &expected_vault {
             return Err(FoodRescueError::InvalidPda.into());
         }
@@ -228,7 +235,12 @@ impl Processor {
                 program_id,
             ),
             &[buyer.clone(), trade_pda.clone(), system.clone()],
-            &[&[Self::TRADE_SEED, &trade_id_bytes, &[trade_bump]]],
+            &[&[
+                Self::TRADE_SEED,
+                &trade_id_bytes,
+                buyer.key.as_ref(),
+                &[trade_bump],
+            ]],
         )?;
 
         invoke_signed(
@@ -240,7 +252,12 @@ impl Processor {
                 token_program.key,
             ),
             &[buyer.clone(), vault.clone(), system.clone()],
-            &[&[Self::VAULT_SEED, &trade_id_bytes, &[vault_bump]]],
+            &[&[
+                Self::VAULT_SEED,
+                &trade_id_bytes,
+                buyer.key.as_ref(),
+                &[vault_bump],
+            ]],
         )?;
 
         invoke(
@@ -311,12 +328,22 @@ impl Processor {
 
         let trade_id_bytes = state.trade_id.to_le_bytes();
         let expected_trade = Pubkey::create_program_address(
-            &[Self::TRADE_SEED, &trade_id_bytes, &[state.trade_bump]],
+            &[
+                Self::TRADE_SEED,
+                &trade_id_bytes,
+                state.buyer.as_ref(),
+                &[state.trade_bump],
+            ],
             program_id,
         )
         .map_err(|_| FoodRescueError::InvalidPda)?;
         let expected_vault = Pubkey::create_program_address(
-            &[Self::VAULT_SEED, &trade_id_bytes, &[state.vault_bump]],
+            &[
+                Self::VAULT_SEED,
+                &trade_id_bytes,
+                state.buyer.as_ref(),
+                &[state.vault_bump],
+            ],
             program_id,
         )
         .map_err(|_| FoodRescueError::InvalidPda)?;
@@ -417,12 +444,22 @@ impl Processor {
 
         let trade_id_bytes = state.trade_id.to_le_bytes();
         let expected_trade = Pubkey::create_program_address(
-            &[Self::TRADE_SEED, &trade_id_bytes, &[state.trade_bump]],
+            &[
+                Self::TRADE_SEED,
+                &trade_id_bytes,
+                state.buyer.as_ref(),
+                &[state.trade_bump],
+            ],
             program_id,
         )
         .map_err(|_| FoodRescueError::InvalidPda)?;
         let expected_vault = Pubkey::create_program_address(
-            &[Self::VAULT_SEED, &trade_id_bytes, &[state.vault_bump]],
+            &[
+                Self::VAULT_SEED,
+                &trade_id_bytes,
+                state.buyer.as_ref(),
+                &[state.vault_bump],
+            ],
             program_id,
         )
         .map_err(|_| FoodRescueError::InvalidPda)?;
@@ -466,7 +503,12 @@ impl Processor {
             .checked_sub(state.protocol_fee)
             .ok_or(FoodRescueError::ArithmeticOverflow)?;
         let trade_bump_seed = [state.trade_bump];
-        let signer_seeds: &[&[u8]] = &[Self::TRADE_SEED, &trade_id_bytes, &trade_bump_seed];
+        let signer_seeds: &[&[u8]] = &[
+            Self::TRADE_SEED,
+            &trade_id_bytes,
+            state.buyer.as_ref(),
+            &trade_bump_seed,
+        ];
 
         if producer_amount > 0 {
             invoke_signed(
@@ -625,12 +667,22 @@ impl Processor {
 
         let trade_id_bytes = state.trade_id.to_le_bytes();
         let expected_trade = Pubkey::create_program_address(
-            &[Self::TRADE_SEED, &trade_id_bytes, &[state.trade_bump]],
+            &[
+                Self::TRADE_SEED,
+                &trade_id_bytes,
+                state.buyer.as_ref(),
+                &[state.trade_bump],
+            ],
             program_id,
         )
         .map_err(|_| FoodRescueError::InvalidPda)?;
         let expected_vault = Pubkey::create_program_address(
-            &[Self::VAULT_SEED, &trade_id_bytes, &[state.vault_bump]],
+            &[
+                Self::VAULT_SEED,
+                &trade_id_bytes,
+                state.buyer.as_ref(),
+                &[state.vault_bump],
+            ],
             program_id,
         )
         .map_err(|_| FoodRescueError::InvalidPda)?;
@@ -665,7 +717,12 @@ impl Processor {
         let refund_amount = escrow.amount;
         if refund_amount > 0 {
             let trade_bump_seed = [state.trade_bump];
-            let signer_seeds: &[&[u8]] = &[Self::TRADE_SEED, &trade_id_bytes, &trade_bump_seed];
+            let signer_seeds: &[&[u8]] = &[
+                Self::TRADE_SEED,
+                &trade_id_bytes,
+                state.buyer.as_ref(),
+                &trade_bump_seed,
+            ];
             invoke_signed(
                 &token_instruction::transfer_checked(
                     token_program.key,
@@ -715,7 +772,12 @@ impl Processor {
 
         let trade_id_bytes = state.trade_id.to_le_bytes();
         let expected_trade = Pubkey::create_program_address(
-            &[Self::TRADE_SEED, &trade_id_bytes, &[state.trade_bump]],
+            &[
+                Self::TRADE_SEED,
+                &trade_id_bytes,
+                state.buyer.as_ref(),
+                &[state.trade_bump],
+            ],
             program_id,
         )
         .map_err(|_| FoodRescueError::InvalidPda)?;
@@ -751,17 +813,14 @@ impl Processor {
         let accounts_iter = &mut accounts.iter();
         let ngo = next_account_info(accounts_iter)?;
         let producer = next_account_info(accounts_iter)?;
-        let authority = next_account_info(accounts_iter)?;
         let protocol_config = next_account_info(accounts_iter)?;
         let rescue_pda = next_account_info(accounts_iter)?;
         let system = next_account_info(accounts_iter)?;
 
-        if !ngo.is_signer
-            || !ngo.is_writable
-            || !producer.is_signer
-            || !authority.is_signer
-            || !rescue_pda.is_writable
-        {
+        // O produtor não assina aqui: ele confirma depois, em transação própria.
+        // Duas assinaturas na mesma transação não sobrevivem a dois atores
+        // assinando em momentos diferentes, porque o blockhash expira antes.
+        if !ngo.is_signer || !ngo.is_writable || !rescue_pda.is_writable {
             return Err(FoodRescueError::InvalidAccount.into());
         }
         if system.key != &system_program::id()
@@ -782,13 +841,23 @@ impl Processor {
             program_id,
         )
         .map_err(|_| FoodRescueError::InvalidPda)?;
-        if expected_protocol != *protocol_config.key || protocol.authority != *authority.key {
+        if expected_protocol != *protocol_config.key {
             return Err(FoodRescueError::InvalidPda.into());
         }
 
+        // O trade_id vem do banco e é previsível, então as duas partes que
+        // atestam entram nas seeds: sem a assinatura da NGO ninguém ocupa o PDA
+        // dela, e a atestação só vale depois que o produtor confirmar.
         let trade_id_bytes = trade_id.to_le_bytes();
-        let (expected_rescue, bump) =
-            Pubkey::find_program_address(&[Self::RESCUE_SEED, &trade_id_bytes], program_id);
+        let (expected_rescue, bump) = Pubkey::find_program_address(
+            &[
+                Self::RESCUE_SEED,
+                &trade_id_bytes,
+                ngo.key.as_ref(),
+                producer.key.as_ref(),
+            ],
+            program_id,
+        );
         if rescue_pda.key != &expected_rescue {
             return Err(FoodRescueError::InvalidPda.into());
         }
@@ -803,7 +872,13 @@ impl Processor {
                 program_id,
             ),
             &[ngo.clone(), rescue_pda.clone(), system.clone()],
-            &[&[Self::RESCUE_SEED, &trade_id_bytes, &[bump]]],
+            &[&[
+                Self::RESCUE_SEED,
+                &trade_id_bytes,
+                ngo.key.as_ref(),
+                producer.key.as_ref(),
+                &[bump],
+            ]],
         )?;
 
         RescueProofState {
@@ -815,9 +890,51 @@ impl Processor {
             carrier,
             metadata_hash,
             created_at: Clock::get()?.unix_timestamp,
+            status: RescueProofState::STATUS_PENDING_PRODUCER,
         }
         .pack(&mut rescue_pda.try_borrow_mut_data()?)?;
 
+        Ok(())
+    }
+
+    /// Segunda metade da atestação: o produtor confirma o Proof of Rescue que a
+    /// NGO abriu. Fica em transação própria para que cada parte assine sozinha,
+    /// na própria carteira, sem depender de um blockhash comum.
+    fn confirm_rescue_proof(program_id: &Pubkey, accounts: &[AccountInfo]) -> ProgramResult {
+        let accounts_iter = &mut accounts.iter();
+        let producer = next_account_info(accounts_iter)?;
+        let rescue_pda = next_account_info(accounts_iter)?;
+
+        if !producer.is_signer || !rescue_pda.is_writable || rescue_pda.owner != program_id {
+            return Err(FoodRescueError::InvalidAccount.into());
+        }
+
+        let mut state = RescueProofState::unpack(&rescue_pda.try_borrow_data()?)?;
+        if state.status != RescueProofState::STATUS_PENDING_PRODUCER {
+            return Err(FoodRescueError::InvalidState.into());
+        }
+        if state.producer != *producer.key {
+            return Err(FoodRescueError::InvalidAccount.into());
+        }
+
+        let trade_id_bytes = state.trade_id.to_le_bytes();
+        let expected_rescue = Pubkey::create_program_address(
+            &[
+                Self::RESCUE_SEED,
+                &trade_id_bytes,
+                state.ngo.as_ref(),
+                state.producer.as_ref(),
+                &[state.bump],
+            ],
+            program_id,
+        )
+        .map_err(|_| FoodRescueError::InvalidPda)?;
+        if expected_rescue != *rescue_pda.key {
+            return Err(FoodRescueError::InvalidPda.into());
+        }
+
+        state.status = RescueProofState::STATUS_CONFIRMED;
+        state.pack(&mut rescue_pda.try_borrow_mut_data()?)?;
         Ok(())
     }
 }

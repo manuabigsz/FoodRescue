@@ -23,11 +23,15 @@ if (!Number.isInteger(tradeId) || tradeId <= 0) {
 }
 
 
-function tradeIdSeed() {
-  const seed = Buffer.alloc(8);
-  seed.writeBigUInt64LE(BigInt(tradeId));
-
-  return seed;
+/**
+ * As seeds vêm autodescritas na preparação (`{ type, value }`), então o script
+ * não repete a regra de derivação — acompanha o backend e o programa sozinho.
+ */
+function seedBuffer(seed) {
+  if (seed.type === 'utf8') return Buffer.from(seed.value, 'utf8');
+  if (seed.type === 'base64') return Buffer.from(seed.value, 'base64');
+  if (seed.type === 'pubkey') return new PublicKey(seed.value).toBuffer();
+  throw new Error(`Tipo de semente não suportado na preparação: ${seed.type}`);
 }
 const programId = new PublicKey(process.env.PROGRAM_ID);
 const buyerToken = new PublicKey(process.env.BUYER_TOKEN_ACCOUNT);
@@ -50,13 +54,13 @@ fs.writeFileSync(`${base}/blockchain-prepare.json`, `${JSON.stringify(prepared, 
 
 /**
  * A ordem e a quantidade de contas vêm da preparação do backend, não de uma
- * lista fixa aqui: quando o programa passa a exigir um signatário novo — como a
- * protocol_authority —, o script acompanha sem precisar de edição.
+ * lista fixa aqui: quando o programa passa a exigir uma conta ou um signatário
+ * novo, o script acompanha sem precisar de edição.
  */
-const derive = (seed) => PublicKey.findProgramAddressSync([Buffer.from(seed), tradeIdSeed()], programId)[0];
+const derive = (name) => PublicKey.findProgramAddressSync(prepared.pda_seeds[name].map(seedBuffer), programId)[0];
 const derived = {
-  trade_pda: derive('foodrescue_trade'),
-  vault_token_account: derive('foodrescue_vault'),
+  trade_pda: derive('trade'),
+  vault_token_account: derive('vault'),
   buyer_token_account: buyerToken,
 };
 

@@ -151,6 +151,20 @@ export async function flush(times = 8) {
     }
 }
 
+/**
+ * Espera um elemento aparecer. Painéis que assinam on-chain importam o web3.js
+ * sob demanda, e o tempo desse import não cabe num número fixo de ciclos.
+ */
+export async function waitFor(selector, tentativas = 60) {
+    for (let i = 0; i < tentativas; i++) {
+        const node = document.querySelector(selector);
+        if (node) return node;
+        await flush(1);
+    }
+
+    throw new Error('Elemento não apareceu no painel: ' + selector);
+}
+
 export function text(selector) {
     return document.querySelector(selector)?.textContent?.trim() ?? null;
 }

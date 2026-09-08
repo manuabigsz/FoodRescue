@@ -27,6 +27,13 @@ class BlockchainPaymentService
 
     private const VAULT_SEED = 'foodrescue_vault';
 
+    /**
+     * As seeds do PDA passaram a incluir a carteira do comprador, então uma
+     * preparação gravada antes disso derivaria o endereço errado. A versão marca
+     * o formato para que a preparação antiga seja refeita em vez de reaproveitada.
+     */
+    private const PREPARATION_VERSION = 2;
+
     private const STATE_SIZE = 244;
 
     private const STATE_INITIALIZED = 0;
@@ -56,8 +63,9 @@ class BlockchainPaymentService
             $locked = Trade::whereKey($trade->id)->lockForUpdate()->firstOrFail();
             $this->assertBuyerCanPay($buyer, $locked, $allowExpired);
             $this->requiredWallet($buyer, 'pagador');
-            if ($locked->blockchain_preparation !== null) {
-                return $locked->blockchain_preparation;
+            $cached = $locked->blockchain_preparation;
+            if ($cached !== null && ($cached['preparation_version'] ?? 1) === self::PREPARATION_VERSION) {
+                return $cached;
             }
             $prepared = $this->buildPreparation($buyer, $locked);
             $locked->update(['blockchain_preparation' => $prepared]);
@@ -105,6 +113,7 @@ class BlockchainPaymentService
             .($carrierWallet ? Base58::decode($carrierWallet) : str_repeat("\0", 32));
 
         return [
+            'preparation_version' => self::PREPARATION_VERSION,
             'cluster' => (string) config('services.solana.cluster'),
             'rpc_url' => (string) config('services.solana.rpc_url'),
             'commitment' => (string) config('services.solana.commitment'),
@@ -133,9 +142,8 @@ class BlockchainPaymentService
                 'protocol_authority' => $protocol->authority_wallet,
             ],
             'pda_seeds' => [
-                'trade' => [self::TRADE_SEED, base64_encode($this->packU64((string) $trade->id))],
-                'vault' => [self::VAULT_SEED, base64_encode($this->packU64((string) $trade->id))],
-                'encoding' => 'utf8_string_then_base64_u64_le',
+                'trade' => $this->pdaSeeds(self::TRADE_SEED, $trade->id, $buyerWallet),
+                'vault' => $this->pdaSeeds(self::VAULT_SEED, $trade->id, $buyerWallet),
             ],
             'initialize_instruction' => [
                 'data_base64' => base64_encode($instruction),
@@ -145,7 +153,6 @@ class BlockchainPaymentService
                     ['name' => 'vault_token_account', 'derived' => true, 'signer' => false, 'writable' => true],
                     ['name' => 'buyer_token_account', 'derived_by_frontend' => true, 'owner_wallet' => $buyerWallet, 'mint' => $mint, 'signer' => false, 'writable' => true],
                     ['name' => 'protocol_config', 'pubkey' => $protocol->config_pda, 'signer' => false, 'writable' => false],
-                    ['name' => 'protocol_authority', 'pubkey' => $protocol->authority_wallet, 'signer' => true, 'writable' => false],
                     ['name' => 'mint', 'pubkey' => $mint, 'signer' => false, 'writable' => false],
                     ['name' => 'system_program', 'pubkey' => self::SYSTEM_PROGRAM, 'signer' => false, 'writable' => false],
                     ['name' => 'token_program', 'pubkey' => self::TOKEN_PROGRAM, 'signer' => false, 'writable' => false],
@@ -165,6 +172,21 @@ class BlockchainPaymentService
         ];
     }
 
+    /**
+     * Seeds autodescritas para o front derivar o PDA sem replicar regra de
+     * codificação: cada item diz o próprio tipo.
+     *
+     * @return list<array{type:string,value:string}>
+     */
+    private function pdaSeeds(string $prefix, int $tradeId, string $buyerWallet): array
+    {
+        return [
+            ['type' => 'utf8', 'value' => $prefix],
+            ['type' => 'base64', 'value' => base64_encode($this->packU64((string) $tradeId))],
+            ['type' => 'pubkey', 'value' => $buyerWallet],
+        ];
+    }
+
     /** @param array{signature:string,trade_pda:string,vault_token_account:string} $data */
     public function confirmInitialization(User $buyer, Trade $trade, array $data): BlockchainTradeAccount
     {
@@ -174,7 +196,7 @@ class BlockchainPaymentService
             abort_if($lockedTrade->blockchainAccount()->exists(), 409, 'O trade já foi inicializado on-chain.');
 
             $prepared = $this->prepare($buyer, $lockedTrade, true);
-            $this->assertTransaction($data['signature'], $prepared['program_id'], $data['trade_pda'], 0, [$prepared['wallets']['buyer'], $prepared['wallets']['protocol_authority']]);
+            $this->assertTransaction($data['signature'], $prepared['program_id'], $data['trade_pda'], 0, [$prepared['wallets']['buyer']]);
             $state = $this->readAndValidateState($data['trade_pda'], $prepared, $data['vault_token_account'], self::STATE_INITIALIZED);
             $this->validateVault($data['vault_token_account'], $data['trade_pda'], $prepared['mint'], '0');
             $status = $this->rpcStatus($data['signature']);

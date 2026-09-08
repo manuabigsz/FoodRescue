@@ -409,7 +409,7 @@ Implemented instructions:
 Conceptually derived from:
 
 ```text
-["foodrescue_trade", trade_id_u64_le]
+["foodrescue_trade", trade_id_u64_le, buyer_pubkey]
 ```
 
 ### Vault PDA
@@ -417,7 +417,7 @@ Conceptually derived from:
 Conceptually derived from:
 
 ```text
-["foodrescue_vault", trade_id_u64_le]
+["foodrescue_vault", trade_id_u64_le, buyer_pubkey]
 ```
 
 The trade state includes relevant immutable participants and monetary values.

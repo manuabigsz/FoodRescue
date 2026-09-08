@@ -55,15 +55,17 @@ O backend retorna:
 - instruction data em Base64;
 - ordem, signer e writable das accounts.
 
-O Laravel não assina a transação.
+O Laravel não assina a transação. O front-end monta a transação a partir dessa resposta — derivando os PDAs pelas seeds e as contas de token pelo endereço associado da mint — e pede a assinatura à carteira do ator. Contas de token associadas que ainda não existirem entram na mesma transação como `CreateIdempotent`, pagas por quem assina; se a instrução do programa falhar depois, a criação volta atrás junto.
+
+Uma instrução com mais de um signatário não é enviável por uma extensão só, porque o `recentBlockhash` expira antes de dois atores assinarem em momentos diferentes. Por isso o Proof of Rescue é feito em duas transações — a NGO abre, o produtor confirma. O caso que ainda exige duas assinaturas juntas é o cancelamento com escrow financiado (comprador e produtor): a tela detecta e avisa antes de o usuário assinar.
 
 ### Initialize
 
 A wallet do buyer assina a instrução `initialize_trade`. O programa cria:
 
 ```text
-trade PDA = ["foodrescue_trade", trade_id u64 little-endian]
-vault PDA = ["foodrescue_vault", trade_id u64 little-endian]
+trade PDA = ["foodrescue_trade", trade_id u64 little-endian, buyer pubkey]
+vault PDA = ["foodrescue_vault", trade_id u64 little-endian, buyer pubkey]
 ```
 
 A vault é uma SPL Token Account cuja authority é o trade PDA.

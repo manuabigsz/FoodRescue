@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Api\Rescue\ConfirmProducerRescueProofRequest;
 use App\Http\Requests\Api\Rescue\ConfirmRescueProofRequest;
 use App\Http\Resources\RescueProofResource;
 use App\Models\Trade;
@@ -25,6 +26,16 @@ class RescueProofController extends Controller
         abort_unless($request->user()->hasRole(UserRole::Ngo->value), 403);
 
         return new RescueProofResource($proofs->confirm($request->user(), $trade, $request->validated()));
+    }
+
+    public function prepareProducer(Trade $trade, RescueProofService $proofs): JsonResponse
+    {
+        return response()->json(['data' => $proofs->prepareProducerConfirmation(request()->user(), $trade)]);
+    }
+
+    public function confirmProducer(ConfirmProducerRescueProofRequest $request, Trade $trade, RescueProofService $proofs): RescueProofResource
+    {
+        return new RescueProofResource($proofs->confirmProducerConfirmation($request->user(), $trade, $request->validated()));
     }
 
     public function show(Trade $trade): RescueProofResource

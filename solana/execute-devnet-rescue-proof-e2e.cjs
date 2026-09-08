@@ -13,44 +13,72 @@ if (!Number.isInteger(tradeId) || tradeId <= 0) {
   throw new Error('Defina TRADE_ID com o número da operação (ex.: 12). Valor recebido: ' + JSON.stringify(process.env.TRADE_ID));
 }
 
-
-function tradeIdSeed() {
-  const seed = Buffer.alloc(8);
-  seed.writeBigUInt64LE(BigInt(tradeId));
-
-  return seed;
-}
 const producer = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync(`${base}/producer.json`, 'utf8'))));
-const authority = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync(`${base}/authority.json`, 'utf8'))));
 const programId = new PublicKey(process.env.PROGRAM_ID);
-async function request(path, method = 'GET', payload) {
-  const response = await fetch(`${api}${path}`, { method, headers: { 'content-type': 'application/json', authorization: `Bearer ${process.env.API_TOKEN || actors.ngo.token}` }, body: payload === undefined ? undefined : JSON.stringify(payload) });
+const connection = new Connection(rpc, 'confirmed');
+
+/**
+ * As seeds vêm autodescritas na preparação (`{ type, value }`), então o script
+ * não repete a regra de derivação — acompanha o backend e o programa sozinho.
+ */
+function seedBuffer(seed) {
+  if (seed.type === 'utf8') return Buffer.from(seed.value, 'utf8');
+  if (seed.type === 'base64') return Buffer.from(seed.value, 'base64');
+  if (seed.type === 'pubkey') return new PublicKey(seed.value).toBuffer();
+  throw new Error(`Tipo de semente não suportado na preparação: ${seed.type}`);
+}
+
+async function request(path, method = 'GET', payload, token) {
+  const response = await fetch(`${api}${path}`, { method, headers: { 'content-type': 'application/json', authorization: `Bearer ${token || process.env.API_TOKEN || actors.ngo.token}` }, body: payload === undefined ? undefined : JSON.stringify(payload) });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(`${method} ${path} ${response.status}: ${JSON.stringify(body)}`);
   return body.data ?? body;
 }
-async function main() {
-  const prepared = await request(`/trades/${tradeId}/rescue-proof/prepare`, 'POST');
-  const idBytes = Buffer.alloc(8); idBytes.writeBigUInt64LE(BigInt(trade.trade_id));
-  const [proofPda] = PublicKey.findProgramAddressSync([Buffer.from('foodrescue_rescue'), idBytes], programId);
-  const account = (name) => new PublicKey(prepared.instruction.accounts.find((item) => item.name === name).pubkey);
-  const ix = new TransactionInstruction({
-    programId,
-    keys: [
-      { pubkey: ngo.publicKey, isSigner: true, isWritable: true },
-      { pubkey: producer.publicKey, isSigner: true, isWritable: false },
-      { pubkey: authority.publicKey, isSigner: true, isWritable: false },
-      { pubkey: account('protocol_config'), isSigner: false, isWritable: false },
-      { pubkey: proofPda, isSigner: false, isWritable: true },
-      { pubkey: account('system_program'), isSigner: false, isWritable: false },
-    ],
-    data: Buffer.from(prepared.instruction.data_base64, 'base64'),
+
+/** A ordem e a quantidade de contas vêm da preparação, não de uma lista fixa. */
+function buildInstruction(prepared, derived) {
+  const keys = prepared.instruction.accounts.map((item) => {
+    const pubkey = item.pubkey ? new PublicKey(item.pubkey) : derived[item.name];
+    if (!pubkey) throw new Error(`Não sei derivar a conta ${item.name}; a preparação não trouxe pubkey.`);
+
+    return { pubkey, isSigner: Boolean(item.signer), isWritable: Boolean(item.writable) };
   });
-  const signature = await sendAndConfirmTransaction(new Connection(rpc, 'confirmed'), new Transaction().add(ix), [ngo, producer, authority], { commitment: 'confirmed' });
+
+  return new TransactionInstruction({ programId, keys, data: Buffer.from(prepared.instruction.data_base64, 'base64') });
+}
+
+async function main() {
+  /**
+   * A atestação acontece em duas transações: a NGO abre, o produtor confirma.
+   * Cada parte assina sozinha — duas assinaturas na mesma transação não
+   * sobreviveriam a dois atores assinando em momentos diferentes.
+   */
+  const prepared = await request(`/trades/${tradeId}/rescue-proof/prepare`, 'POST');
+  const proofPda = PublicKey.findProgramAddressSync(prepared.pda_seeds.rescue.map(seedBuffer), programId)[0];
+
+  const signature = await sendAndConfirmTransaction(
+    connection,
+    new Transaction().add(buildInstruction(prepared, { rescue_proof_pda: proofPda })),
+    [ngo],
+    { commitment: 'confirmed' },
+  );
   console.log(`rescue_proof_signature=${signature}`);
   console.log(`rescue_proof_pda=${proofPda.toBase58()}`);
-  const confirmed = await request(`/trades/${tradeId}/rescue-proof/confirm`, 'POST', { signature, proof_pda: proofPda.toBase58() });
+  const opened = await request(`/trades/${tradeId}/rescue-proof/confirm`, 'POST', { signature, proof_pda: proofPda.toBase58() });
+  console.log(`rescue_backend_status=${opened.status || 'proof_pending'}`);
+
+  const producerToken = process.env.PRODUCER_API_TOKEN || actors.producer.token;
+  const producerPrepared = await request(`/trades/${tradeId}/rescue-proof/producer/prepare`, 'POST', undefined, producerToken);
+  const producerSignature = await sendAndConfirmTransaction(
+    connection,
+    new Transaction().add(buildInstruction(producerPrepared, {})),
+    [producer],
+    { commitment: 'confirmed' },
+  );
+  console.log(`rescue_proof_producer_signature=${producerSignature}`);
+  const confirmed = await request(`/trades/${tradeId}/rescue-proof/producer/confirm`, 'POST', { signature: producerSignature }, producerToken);
   console.log(`rescue_backend_status=${confirmed.status || 'completed'}`);
-  fs.writeFileSync(`${base}/donation-rescue-proof.local.json`, `${JSON.stringify({ signature, proof_pda: proofPda.toBase58(), metadata_hash: prepared.metadata_hash, confirmed }, null, 2)}\n`, { mode: 0o600 });
+
+  fs.writeFileSync(`${base}/donation-rescue-proof.local.json`, `${JSON.stringify({ signature, producer_signature: producerSignature, proof_pda: proofPda.toBase58(), metadata_hash: prepared.metadata_hash, confirmed }, null, 2)}\n`, { mode: 0o600 });
 }
 main().catch((error) => { console.error(error.stack || error.message || error); process.exitCode = 1; });

@@ -15,7 +15,7 @@ class RustLayoutCompatibilityTest extends TestCase
     {
         $key = fn (int $byte) => Base58::encode(str_repeat(chr($byte), 32));
         $fixtures = [];
-        foreach (['trade' => 244, 'protocol' => 98, 'rescue' => 146] as $name => $size) {
+        foreach (['trade' => 244, 'protocol' => 98, 'rescue' => 147] as $name => $size) {
             $fixtures[$name] = file_get_contents(base_path('tests/Fixtures/Solana/'.$name.'.bin'));
             $this->assertSame($size, strlen($fixtures[$name]));
         }
@@ -42,6 +42,6 @@ class RustLayoutCompatibilityTest extends TestCase
         $this->assertSame(['trade_id' => 42], $proof->invoke(app(RescueProofService::class), 'rescue', [
             'program_id' => $key(9), 'trade_id' => 42, 'wallets' => ['producer' => $key(2), 'ngo' => $key(1), 'carrier' => $key(3)],
             'metadata_hash' => str_repeat('0a', 32),
-        ]));
+        ], 0));
     }
 }

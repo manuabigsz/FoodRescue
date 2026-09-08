@@ -29,7 +29,7 @@ fn main() {
         mint: key(4),
     };
     let proof = RescueProofState {
-        version: 1,
+        version: 2,
         bump: 249,
         trade_id: 42,
         producer: key(2),
@@ -37,6 +37,7 @@ fn main() {
         carrier: key(3),
         metadata_hash: [10; 32],
         created_at: 2_000_000_001,
+        status: RescueProofState::STATUS_PENDING_PRODUCER,
     };
     std::fs::create_dir_all("fixtures").unwrap();
     let mut raw = vec![0; TradeState::LEN];

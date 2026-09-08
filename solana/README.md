@@ -8,21 +8,22 @@ Programa Solana nativo em Rust, sem Anchor.
 - `2 - initialize_protocol`: inicializa authority, treasury e mint no ProtocolConfig PDA.
 - `3 - settle_trade`: distribui produto líquido, taxa e frete.
 - `4 - cancel_trade`: devolve todo o saldo da vault ao buyer.
-- `5 - create_rescue_proof`: grava atestação assinada por NGO e producer.
+- `5 - create_rescue_proof`: NGO assina e abre a atestação social como `PENDING_PRODUCER`.
 - `1 - fund_trade`: transfere `product_amount + shipping_amount` da token account do buyer para a vault e marca o trade como funded.
 - `6 - mark_ready_for_pickup`: producer assina `FUNDED → READY_FOR_PICKUP`.
 - `7 - confirm_pickup`: carrier ou buyer/NGO assina `READY_FOR_PICKUP → IN_TRANSIT`.
 - `8 - mark_delivered`: carrier ou buyer/NGO assina `IN_TRANSIT → DELIVERED`.
+- `9 - confirm_rescue_proof`: producer assina e fecha a atestação, `PENDING_PRODUCER → CONFIRMED`.
 
-`initialize_trade` exige assinatura do buyer e da authority registrada no `ProtocolConfig`. `create_rescue_proof` exige assinatura da NGO, do producer e da mesma authority; ambas as instruções recebem o `ProtocolConfig` para validar essa relação on-chain.
+O `trade_id` usado nas seeds é o ID sequencial do banco, portanto previsível. Em vez de exigir uma authority co-assinante, os PDAs carregam nas seeds quem precisa assinar a instrução: `initialize_trade` põe o buyer no trade e na vault, e `create_rescue_proof` põe NGO e producer no proof. Ocupar o PDA alheio passa a exigir a assinatura da parte envolvida, e cada instrução fica com um único signatário — o que a carteira do navegador consegue enviar sozinha. Por isso a atestação social é feita em duas instruções: a NGO abre com `create_rescue_proof` e o producer fecha com `confirm_rescue_proof`. Duas assinaturas na mesma transação não sobreviveriam a dois atores assinando em momentos diferentes, porque o `recentBlockhash` expira antes. Ambas recebem o `ProtocolConfig` para validar mint e configuração on-chain.
 
 O programa valida `protocol_fee = product_amount * 200 / 10000` (2%). O frete não entra no cálculo da taxa.
 
 ## PDAs
 
 ```text
-trade = PDA(["foodrescue_trade", trade_id_u64_le])
-vault = PDA(["foodrescue_vault", trade_id_u64_le])
+trade = PDA(["foodrescue_trade", trade_id_u64_le, buyer_pubkey])
+vault = PDA(["foodrescue_vault", trade_id_u64_le, buyer_pubkey])
 ```
 
 ## Build
@@ -63,7 +64,7 @@ treasury
 mint
 ```
 
-A instrução `initialize_protocol` exige que `authority` assine e cria somente o PDA derivado dessa própria public key. Assim outra wallet não consegue inicializar o PDA oficial da authority do FoodRescue. As instruções `initialize_trade` e `create_rescue_proof` também exigem essa mesma authority como assinante, validada contra o `ProtocolConfig`, impedindo ocupação antecipada dos PDAs por terceiros.
+A instrução `initialize_protocol` exige que `authority` assine e cria somente o PDA derivado dessa própria public key. Assim outra wallet não consegue inicializar o PDA oficial da authority do FoodRescue. `initialize_trade` e `create_rescue_proof` não pedem a authority como assinante: a ocupação antecipada dos PDAs é impedida pelas próprias seeds, que incluem as partes signatárias.
 
 O backend deve configurar `SOLANA_PROTOCOL_AUTHORITY` e `SOLANA_PROTOCOL_TREASURY`, preparar a instrução administrativa, solicitar assinatura da authority e confirmar o estado on-chain.
 
@@ -96,22 +97,23 @@ A instrução `cancel_trade` (tag `4`) exige buyer OU producer no estado INITIAL
 
 ## Proof of Rescue
 
-A instrução `create_rescue_proof` (tag `5`) cria um PDA de atestação social:
+A atestação social é feita em duas transações, uma por parte. A instrução `create_rescue_proof` (tag `5`) cria o PDA:
 
 ```text
-rescue = PDA(["foodrescue_rescue", trade_id_u64_le])
+rescue = PDA(["foodrescue_rescue", trade_id_u64_le, ngo_pubkey, producer_pubkey])
 ```
 
 Contas:
 
 1. NGO (signer + payer)
-2. producer (signer)
-3. protocol authority (signer)
-4. ProtocolConfig PDA
-5. Rescue Proof PDA (writable)
-6. System Program
+2. producer
+3. ProtocolConfig PDA
+4. Rescue Proof PDA (writable)
+5. System Program
 
-O estado contém `trade_id`, wallets de producer/NGO/carrier, SHA-256 dos metadados canônicos da doação e timestamp. Producer, NGO e authority precisam assinar juntos.
+Depois, `confirm_rescue_proof` (tag `9`) fecha a atestação com duas contas: producer (signer) e o Rescue Proof PDA (writable). O programa confere que o `producer` gravado no estado é quem assina e que o status ainda é `PENDING_PRODUCER`.
+
+O estado contém `trade_id`, wallets de producer/NGO/carrier, SHA-256 dos metadados canônicos da doação, timestamp e o status da atestação (`0 = PENDING_PRODUCER`, `1 = CONFIRMED`). O `RescueProofState` está na versão 2, com 147 bytes.
 
 ## Validação reproduzível no container existente
 

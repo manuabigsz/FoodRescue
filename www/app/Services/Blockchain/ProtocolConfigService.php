@@ -34,8 +34,10 @@ class ProtocolConfigService
             'treasury_wallet' => $treasury,
             'config_pda' => $data['config_pda'],
             'pda_seeds' => [
-                'protocol' => [self::PROTOCOL_SEED, $authority],
-                'encoding' => 'utf8_string_then_authority_pubkey_bytes',
+                'protocol' => [
+                    ['type' => 'utf8', 'value' => self::PROTOCOL_SEED],
+                    ['type' => 'pubkey', 'value' => $authority],
+                ],
             ],
             'initialize_instruction' => [
                 'data_base64' => base64_encode(chr(2).Base58::decode($treasury)),

@@ -7,7 +7,8 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 #[Fillable([
-    'trade_id', 'program_id', 'proof_pda', 'signature', 'slot', 'metadata_hash', 'confirmed_at', 'metadata',
+    'trade_id', 'program_id', 'proof_pda', 'signature', 'producer_signature', 'slot', 'metadata_hash',
+    'confirmed_at', 'producer_confirmed_at', 'metadata',
 ])]
 class RescueProof extends Model
 {
@@ -21,6 +22,7 @@ class RescueProof extends Model
         return [
             'slot' => 'integer',
             'confirmed_at' => 'immutable_datetime',
+            'producer_confirmed_at' => 'immutable_datetime',
             'metadata' => 'array',
         ];
     }
