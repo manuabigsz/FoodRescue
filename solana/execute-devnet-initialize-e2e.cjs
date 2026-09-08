@@ -13,7 +13,6 @@ const rpc = process.env.SOLANA_RPC_URL || 'https://api.devnet.solana.com';
 const base = '/workspace/keypar/devnet-e2e';
 const actors = JSON.parse(fs.readFileSync(`${base}/actors.local.json`, 'utf8'));
 const trade = JSON.parse(fs.readFileSync(`${base}/trade.local.json`, 'utf8'));
-const authority = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync(`${base}/authority.json`, 'utf8'))));
 const buyer = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync(`${base}/buyer.json`, 'utf8'))));
 const programId = new PublicKey(process.env.PROGRAM_ID);
 const buyerToken = new PublicKey(process.env.BUYER_TOKEN_ACCOUNT);
@@ -50,7 +49,6 @@ const instruction = new TransactionInstruction({
     { pubkey: PublicKey.findProgramAddressSync([Buffer.from('foodrescue_vault'), Buffer.from([1, 0, 0, 0, 0, 0, 0, 0])], programId)[0], isSigner: false, isWritable: true },
     { pubkey: buyerToken, isSigner: false, isWritable: true },
     { pubkey: pubkey('protocol_config'), isSigner: false, isWritable: false },
-    { pubkey: pubkey('protocol_authority'), isSigner: true, isWritable: false },
     { pubkey: mint, isSigner: false, isWritable: false },
     { pubkey: pubkey('system_program'), isSigner: false, isWritable: false },
     { pubkey: pubkey('token_program'), isSigner: false, isWritable: false },
@@ -59,7 +57,7 @@ const instruction = new TransactionInstruction({
 });
 
 const connection = new Connection(rpc, 'confirmed');
-const signature = await sendAndConfirmTransaction(connection, new Transaction().add(instruction), [buyer, authority], { commitment: 'confirmed' });
+const signature = await sendAndConfirmTransaction(connection, new Transaction().add(instruction), [buyer], { commitment: 'confirmed' });
 const tradePda = instruction.keys[1].pubkey.toBase58();
 const vault = instruction.keys[2].pubkey.toBase58();
 console.log(`initialize_signature=${signature}`);

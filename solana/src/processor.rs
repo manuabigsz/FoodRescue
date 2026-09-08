@@ -159,14 +159,12 @@ impl Processor {
         let vault = next_account_info(accounts_iter)?;
         let buyer_token = next_account_info(accounts_iter)?;
         let protocol_config = next_account_info(accounts_iter)?;
-        let authority = next_account_info(accounts_iter)?;
         let mint = next_account_info(accounts_iter)?;
         let system = next_account_info(accounts_iter)?;
         let token_program = next_account_info(accounts_iter)?;
 
         if !buyer.is_signer
             || !buyer.is_writable
-            || !authority.is_signer
             || !trade_pda.is_writable
             || !vault.is_writable
             || !buyer_token.is_writable
@@ -190,10 +188,7 @@ impl Processor {
             program_id,
         )
         .map_err(|_| FoodRescueError::InvalidPda)?;
-        if expected_protocol != *protocol_config.key
-            || protocol.mint != *mint.key
-            || protocol.authority != *authority.key
-        {
+        if expected_protocol != *protocol_config.key || protocol.mint != *mint.key {
             return Err(FoodRescueError::InvalidPda.into());
         }
 

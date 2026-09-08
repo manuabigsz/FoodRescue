@@ -6,7 +6,6 @@ const base = '/workspace/keypar/devnet-e2e';
 const actors = JSON.parse(fs.readFileSync(`${base}/actors.local.json`, 'utf8'));
 const trade = JSON.parse(fs.readFileSync(`${base}/donation.local.json`, 'utf8'));
 const ngo = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync(`${base}/ngo.json`, 'utf8'))));
-const authority = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync(`${base}/authority.json`, 'utf8'))));
 const programId = new PublicKey(process.env.PROGRAM_ID);
 const mint = new PublicKey(process.env.MINT_ADDRESS);
 const buyerToken = new PublicKey(process.env.NGO_TOKEN_ACCOUNT);
@@ -31,14 +30,13 @@ async function main() {
       { pubkey: vault, isSigner: false, isWritable: true },
       { pubkey: buyerToken, isSigner: false, isWritable: true },
       { pubkey: key('protocol_config'), isSigner: false, isWritable: false },
-      { pubkey: authority.publicKey, isSigner: true, isWritable: false },
       { pubkey: mint, isSigner: false, isWritable: false },
       { pubkey: key('system_program'), isSigner: false, isWritable: false },
       { pubkey: key('token_program'), isSigner: false, isWritable: false },
     ],
     data: Buffer.from(prepared.initialize_instruction.data_base64, 'base64'),
   });
-  const signature = await sendAndConfirmTransaction(new Connection(rpc, 'confirmed'), new Transaction().add(instruction), [ngo, authority], { commitment: 'confirmed' });
+  const signature = await sendAndConfirmTransaction(new Connection(rpc, 'confirmed'), new Transaction().add(instruction), [ngo], { commitment: 'confirmed' });
   console.log(`donation_initialize_signature=${signature}`);
   console.log(`donation_trade_pda=${tradePda.toBase58()}`);
   console.log(`donation_vault=${vault.toBase58()}`);
