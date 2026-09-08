@@ -1,3 +1,4 @@
+import { paintNavigation } from './navigation.js';
 import { api } from './api.js';
 import { short } from './format.js';
 import { roleLabels } from './labels.js';
@@ -44,7 +45,11 @@ export async function bootSession() {
         return true;
     }
     try {
-        state.user = await api('/auth/me', { silent: true });
+        const user = await api('/auth/me', { silent: true });
+        // Um 401 em outra chamada pode ter encerrado a sessão enquanto isto ia e
+        // voltava; nesse caso a resposta é descartada em vez de ressuscitar o usuário.
+        if (!state.token) return true;
+        state.user = user;
         sessionStorage.setItem('foodrescue_user', JSON.stringify(state.user));
     } catch (_) {
         // Um 401 já encerrou a sessão; falhas de rede mantêm o usuário em cache.
@@ -72,4 +77,5 @@ export function updateSessionUi() {
         button.textContent = state.user ? short(state.user.solana_wallet_address || state.wallet || state.user.name, 6, 4) : 'Conectar carteira';
     });
     document.querySelectorAll('[data-logout]').forEach(function (button) { button.hidden = !state.user; });
+    paintNavigation();
 }

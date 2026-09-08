@@ -1,3 +1,4 @@
+import { paintNavigation } from './core/navigation.js';
 import { renderAdmin } from './pages/admin.js';
 import { renderCatalog } from './pages/catalog.js';
 import { renderDashboard } from './pages/dashboard.js';
@@ -13,7 +14,7 @@ import { renderTracking } from './pages/tracking.js';
 
 export function route() {
     const path = location.hash.replace(/^#\/?/, '').split('?')[0] || '';
-    document.querySelectorAll('[data-nav]').forEach(function (link) { link.classList.toggle('active', link.dataset.nav === path); });
+    paintNavigation();
     document.querySelector('#mobile-nav').hidden = true;
     document.querySelector('.menu-button').setAttribute('aria-expanded', 'false');
     if (path === 'catalogo') return renderCatalog();

@@ -43,7 +43,7 @@ class ShippingController extends Controller
         $requests = ShippingRequest::query()
             ->where('status', ShippingRequestStatus::Quoting->value)
             ->where('quotation_expires_at', '>', now())
-            ->with('trade.surplusLot.agriculturalProduct')
+            ->with(['trade.surplusLot.agriculturalProduct', 'offers' => fn ($offers) => $offers->where('carrier_id', $user->id)->latest('id')])
             ->latest()
             ->paginate(20);
 
@@ -56,6 +56,14 @@ class ShippingController extends Controller
         $offer = $logistics->createOffer($request->user(), $shippingRequest, $request->validated());
 
         return (new ShippingOfferResource($offer))->response()->setStatusCode(201);
+    }
+
+    /** Revisão da própria cotação enquanto o destinatário não escolheu. */
+    public function updateOffer(StoreShippingOfferRequest $request, ShippingOffer $shippingOffer, TradeLogistics $logistics): ShippingOfferResource
+    {
+        abort_unless($request->user()->hasRole(UserRole::Carrier->value), 403);
+
+        return new ShippingOfferResource($logistics->updateOffer($request->user(), $shippingOffer, $request->validated()));
     }
 
     public function offers(Trade $trade): AnonymousResourceCollection

@@ -23,11 +23,23 @@ export function selfManagedShipping(trade) {
  * seria recusado.
  */
 
+export function onChainEscrow(trade) {
+    return Boolean(trade.blockchain?.trade_pda);
+}
+
 export function tradeActions(trade) {
     const actions = [];
     const recipient = isRecipientOf(trade);
     const producer = isProducerOf(trade);
     const carrier = currentRole() === 'carrier';
+
+    /**
+     * Depois que a custódia existe on-chain, cada etapa de entrega precisa de uma
+     * transação assinada — o backend recusa a confirmação sem assinatura. Como a
+     * assinatura vive nos scripts de solana/, a tela explica o passo em vez de
+     * oferecer um botão que sempre falharia.
+     */
+    const signed = onChainEscrow(trade);
 
     if (trade.status === 'reserved' && recipient) {
         actions.push(['shipping', 'Solicitar cotação de frete', '']);
@@ -40,13 +52,16 @@ export function tradeActions(trade) {
         actions.push(['payment', 'Dados do pagamento', '']);
     }
     if (trade.status === 'funded' && producer) {
-        actions.push(['ready', 'Liberar para coleta', '']);
+        actions.push(signed ? ['onchain-ready', 'Como liberar para coleta', 'button-ghost'] : ['ready', 'Liberar para coleta', '']);
     }
     if (trade.status === 'ready_for_pickup' && (carrier || (recipient && selfManagedShipping(trade)))) {
-        actions.push(['pickup', 'Confirmar coleta', '']);
+        actions.push(signed ? ['onchain-pickup', 'Como confirmar a coleta', 'button-ghost'] : ['pickup', 'Confirmar coleta', '']);
     }
     if (trade.status === 'in_transit' && recipient) {
-        actions.push(['delivered', 'Confirmar entrega', '']);
+        actions.push(signed ? ['onchain-delivered', 'Como confirmar a entrega', 'button-ghost'] : ['delivered', 'Confirmar entrega', '']);
+    }
+    if (trade.status === 'delivered' && signed && recipient) {
+        actions.push(['onchain-settlement', 'Como liquidar a operação', 'button-ghost']);
     }
     if (['delivered', 'proof_pending', 'completed'].includes(trade.status) && (recipient || producer)) {
         actions.push(['rating', 'Avaliar contraparte', 'button-ghost']);
@@ -94,6 +109,10 @@ export function openActionPanel(trade, action, keepOpen) {
         delivered: confirmationPanel('Confirmar a entrega', 'O destinatário declara que recebeu a carga. Em doações, o próximo passo é o Proof of Rescue.', '/delivery/delivered'),
         rating: ratingPanel,
         cancel: cancelPanel,
+        'onchain-ready': onChainPanel('Liberar para coleta', 'produtor', 'e2e:delivery'),
+        'onchain-pickup': onChainPanel('Confirmar a coleta', 'transportadora (ou destinatário, no transporte próprio)', 'e2e:delivery'),
+        'onchain-delivered': onChainPanel('Confirmar a entrega', 'destinatário', 'e2e:delivery'),
+        'onchain-settlement': onChainPanel('Liquidar a operação', 'destinatário', 'e2e:settlement'),
     };
     (panels[action] || function () {})(trade, target);
 }
@@ -284,4 +303,20 @@ export function cancelPanel(trade, target) {
             return api('/trades/' + trade.id + '/cancel', { method: 'POST', body: JSON.stringify(reason ? { reason: reason } : {}) });
         });
     });
+}
+
+/**
+ * Etapa que exige transação assinada. Mostra quem assina e o comando exato, em
+ * vez de um botão que o backend recusaria por falta de assinatura.
+ */
+export function onChainPanel(titulo, quemAssina, script) {
+    return function (trade, target) {
+        target.innerHTML = panelShell(
+            titulo + ' — exige assinatura',
+            '<p>Esta operação tem custódia on-chain (<code>' + esc(short(trade.blockchain.trade_pda, 8, 6)) + '</code>), então o programa Solana precisa registrar a etapa. Quem assina: <strong>' + quemAssina + '</strong>.</p>' +
+            '<p class="footer-note">Na pasta <code>solana/</code>, com <code>TRADE_ID=' + trade.id + '</code> no ambiente:</p>' +
+            '<pre class="code-block">npm run ' + script + '</pre>' +
+            '<p class="footer-note">Assim que a transação for confirmada, o estado desta tela avança sozinho.</p>',
+        );
+    };
 }

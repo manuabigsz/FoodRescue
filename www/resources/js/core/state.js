@@ -11,6 +11,7 @@ export const state = {
     catalogIsDemo: false,
     catalogFilters: { search: '', sort: 'urgency', donation_eligible: '', per_page: 12, page: 1 },
     catalogReason: null,
+    catalogFilterTouched: false,
     trades: [],
     selectedTradeId: null,
     trackingPanel: null,

@@ -1,6 +1,7 @@
 import { openAuth, openAuthOrDashboard } from '../auth/modal.js';
 import { api } from '../core/api.js';
 import { deadlineLabel, esc, money } from '../core/format.js';
+import { currentRole } from '../core/session.js';
 import { state } from '../core/state.js';
 import { selectOptions, setPage, toast } from '../core/ui.js';
 import { selectedTradeId } from './tracking.js';
@@ -15,6 +16,9 @@ export const sampleLots = [
 ];
 
 export async function renderCatalog() {
+    /** A ONG só pode aceitar lotes elegíveis; o filtro já entra ligado até ela mexer. */
+    if (!state.catalogFilterTouched && currentRole() === 'ngo') state.catalogFilters.donation_eligible = '1';
+
     const filters = state.catalogFilters;
     setPage(
         '<div class="page"><div class="shell"><div class="page-head"><div><span class="eyebrow">MARKETPLACE</span><h1>Excedentes disponíveis</h1><p>Alimentos próprios para consumo, com prazo, origem e qualidade informados pelo produtor.</p></div><button class="button" type="button" data-new-lot>+ Publicar excedente</button></div>' +
@@ -122,12 +126,14 @@ export function bindCatalogToolbar() {
         searchTimer = setTimeout(function () {
             if (term === state.catalogFilters.search) return;
             state.catalogFilters.search = term;
+            state.catalogFilterTouched = true;
             state.catalogFilters.page = 1;
             loadCatalog();
         }, 350);
     });
     document.querySelector('#donation-filter')?.addEventListener('change', function (event) {
         state.catalogFilters.donation_eligible = event.target.value;
+        state.catalogFilterTouched = true;
         state.catalogFilters.page = 1;
         loadCatalog();
     });

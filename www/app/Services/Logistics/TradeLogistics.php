@@ -84,6 +84,38 @@ class TradeLogistics
         }, 3);
     }
 
+    /**
+     * Revisa a própria cotação enquanto ela ainda está pendente e a janela de
+     * cotação aberta. Depois de selecionada pelo destinatário, os termos viram
+     * base do pagamento e não podem mais mudar.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    public function updateOffer(User $carrier, ShippingOffer $shippingOffer, array $data): ShippingOffer
+    {
+        return DB::transaction(function () use ($carrier, $shippingOffer, $data): ShippingOffer {
+            $offer = ShippingOffer::whereKey($shippingOffer->id)->lockForUpdate()->firstOrFail();
+            abort_unless($offer->carrier_id === $carrier->id, 403, 'Esta proposta pertence a outra transportadora.');
+
+            $request = ShippingRequest::whereKey($offer->shipping_request_id)->lockForUpdate()->firstOrFail();
+            $this->assertQuoting($request);
+            abort_unless($offer->status === ShippingOfferStatus::Pending, 409, 'Só propostas pendentes podem ser alteradas.');
+            abort_if($request->selected_shipping_offer_id !== null, 409, 'A cotação já foi decidida pelo destinatário.');
+
+            $expiresAt = $data['expires_at'] ?? $request->quotation_expires_at;
+            abort_if(Carbon::parse($expiresAt)->greaterThan($request->quotation_expires_at), 422, 'A validade da proposta não pode ultrapassar o prazo da cotação.');
+
+            $offer->update([
+                'amount' => $data['amount'],
+                'pickup_at' => $data['pickup_at'],
+                'estimated_delivery_at' => $data['estimated_delivery_at'],
+                'expires_at' => $expiresAt,
+            ]);
+
+            return $offer->load('carrier.roles');
+        }, 3);
+    }
+
     public function selectOffer(User $buyer, Trade $trade, ShippingOffer $shippingOffer): Trade
     {
         return DB::transaction(function () use ($buyer, $trade, $shippingOffer): Trade {

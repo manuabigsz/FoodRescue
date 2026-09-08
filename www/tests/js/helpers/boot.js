@@ -67,11 +67,41 @@ export function paginated(data, meta = {}) {
  * Carrega o app num DOM limpo. `routes` mapeia "METHOD /caminho" para a resposta;
  * o caminho é comparado sem a query string, e uma função recebe a requisição.
  */
+/**
+ * O app registra listeners em window/document ao ser importado. Como o jsdom é
+ * compartilhado pelo arquivo de teste inteiro, sem remover os do boot anterior
+ * várias instâncias respondem ao mesmo hashchange e disputam o DOM.
+ */
+let listenersDoBootAnterior = [];
+
+function isolarListeners() {
+    listenersDoBootAnterior.forEach(function ([alvo, tipo, fn]) { alvo.removeEventListener(tipo, fn); });
+    listenersDoBootAnterior = [];
+
+    const originais = new Map();
+    [window, document].forEach(function (alvo) {
+        const original = alvo.addEventListener.bind(alvo);
+        originais.set(alvo, original);
+        alvo.addEventListener = function (tipo, fn, opcoes) {
+            listenersDoBootAnterior.push([alvo, tipo, fn]);
+            original(tipo, fn, opcoes);
+        };
+    });
+
+    return function restaurar() {
+        originais.forEach(function (original, alvo) { alvo.addEventListener = original; });
+    };
+}
+
 export async function bootApp({ routes = {}, session = null, hash = '#/' } = {}) {
+    const restaurarListeners = isolarListeners();
     document.body.innerHTML = domShell();
     window.scrollTo = vi.fn();
     sessionStorage.clear();
     window.location.hash = hash;
+    // O jsdom entrega hashchange numa tarefa própria: drenar aqui evita que o
+    // evento desta troca chegue depois e sobrescreva uma navegação do teste.
+    await flush(2);
 
     if (session) {
         sessionStorage.setItem('foodrescue_token', session.token || 'test-token');
@@ -98,6 +128,7 @@ export async function bootApp({ routes = {}, session = null, hash = '#/' } = {})
 
     vi.resetModules();
     await import('../../../resources/js/app.js');
+    restaurarListeners();
     await flush();
 
     return { calls, fetch: global.fetch };

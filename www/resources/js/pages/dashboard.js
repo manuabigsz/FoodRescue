@@ -1,3 +1,4 @@
+import { accountMenuFor, activeNav, menuFor } from '../core/navigation.js';
 import { api } from '../core/api.js';
 import { esc, money, quantityLabel, reputationLabel } from '../core/format.js';
 import { roleLabels, statusLabels } from '../core/labels.js';
@@ -60,6 +61,16 @@ export function ngoMetrics(data) {
     ];
 }
 
+
+/** A barra lateral repete o menu do papel para o usuário não perder o contexto ao sair do painel. */
+function sidebarNav(role) {
+    const itens = [...menuFor(role), ...accountMenuFor(role)];
+
+    return '<nav>' + itens.map(function (item) {
+        return '<a href="' + item.hash + '"' + (item.nav === activeNav() ? ' class="active" aria-current="page"' : '') + '>' + esc(item.label) + '</a>';
+    }).join('') + '</nav>';
+}
+
 export async function renderDashboard() {
     const role = currentRole();
     if (state.user?.roles?.includes('admin')) {
@@ -83,10 +94,7 @@ export async function renderDashboard() {
     setPage(
         '<div class="page"><div class="shell"><div class="page-head"><div><span class="eyebrow">VISÃO OPERACIONAL</span><h1>Painel ' + roleLabels[role] + '</h1><p>Números da sua conta, apurados pela API a partir das operações concluídas.</p></div><a class="button" href="' + view.cta[1] + '">' + view.cta[0] + '</a></div>' +
         '<div class="dashboard-layout"><aside class="sidebar"><div class="sidebar-user"><strong>' + esc(state.user.name) + '</strong><small>' + roleLabels[role] + '</small></div>' +
-        '<nav><a class="active" href="#/dashboard">⌂ Visão geral</a><a href="#/acompanhamento">◫ Operações</a>' +
-        (role === 'carrier' ? '<a href="#/fretes">↗ Rotas abertas</a>' : '<a href="#/catalogo">◇ Excedentes</a>') +
-        (role === 'producer' ? '<a href="#/meus-lotes">◒ Meus lotes</a>' : '') +
-        '<a href="#/reputacao">◇ Reputação</a><a href="#/perfil">⚙ Perfil</a><a href="#/rede">⛓ Rede Solana</a></nav></aside>' +
+        sidebarNav(role) + '</aside>' +
         '<section class="dashboard-main"><div class="metric-grid" data-metrics><div class="skeleton" style="min-height:120px"></div><div class="skeleton" style="min-height:120px"></div><div class="skeleton" style="min-height:120px"></div><div class="skeleton" style="min-height:120px"></div></div>' +
         '<div class="panel-grid"><article class="panel"><h2>Operações por etapa</h2><div class="status-list" data-statuses></div></article>' +
         '<article class="panel"><h2>Operações recentes</h2><div class="activity-list" data-recent></div></article></div></section></div></div></div>',

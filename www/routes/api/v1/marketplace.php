@@ -38,6 +38,7 @@ Route::post('trades/{trade}/shipping', [ShippingController::class, 'store'])->wh
 Route::get('trades/{trade}/shipping', [ShippingController::class, 'show'])->whereNumber('trade')->name('shipping.show');
 Route::get('shipping-requests', [ShippingController::class, 'index'])->name('shipping.index');
 Route::post('shipping-requests/{shippingRequest}/offers', [ShippingController::class, 'offer'])->whereNumber('shippingRequest')->middleware('throttle:sensitive')->name('shipping.offers.store');
+Route::patch('shipping-offers/{shippingOffer}', [ShippingController::class, 'updateOffer'])->whereNumber('shippingOffer')->middleware('throttle:sensitive')->name('shipping.offers.update');
 Route::get('trades/{trade}/shipping-offers', [ShippingController::class, 'offers'])->whereNumber('trade')->name('shipping.offers.index');
 Route::post('trades/{trade}/shipping-offers/{shippingOffer}/select', [ShippingController::class, 'select'])->whereNumber('trade')->whereNumber('shippingOffer')->middleware('throttle:sensitive')->name('shipping.offers.select');
 Route::post('trades/{trade}/ngo-managed', [ShippingController::class, 'ngoManaged'])->whereNumber('trade')->middleware('throttle:sensitive')->name('shipping.ngo_managed');

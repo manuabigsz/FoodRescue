@@ -258,6 +258,17 @@ fieldset.field legend { padding: 0 .35rem; color: #4a5952; font-size: .79rem; fo
 .stars { color: #d8a01f; letter-spacing: .06em; }
 .activity-icon { display: inline-grid; place-items: center; }
 
+.code-block { margin: .5rem 0; padding: .7rem .85rem; border-radius: 10px; background: #12261e; color: #cfe6d8; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .82rem; overflow-x: auto; }
+
+.field-hint-label { color: #4a5952; font-size: .79rem; font-weight: 700; }
+.transit-hint { display: flex; align-items: center; min-height: 46px; padding: .72rem .8rem; border: 1px dashed #cfd9d1; border-radius: 11px; color: var(--forest); background: #f6f9f4; font-size: .86rem; font-weight: 700; }
+.transit-hint.invalid { border-color: #d99a8f; color: #8c3a2c; background: #fdf1ef; }
+
+.mobile-nav-divider { display: block; padding: .9rem .9rem .3rem; color: var(--muted); font-size: .74rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; }
+.desktop-nav a[aria-current="page"], .mobile-nav a[aria-current="page"] { color: var(--forest); font-weight: 800; }
+
+.quote-status { margin: .9rem 0 0; padding: .7rem .9rem; border: 1px solid #bcd8c4; border-radius: 12px; color: #1d4a35; background: #eef7f0; font-size: .87rem; }
+
 @media (max-width: 980px) {
     .desktop-nav, .network-chip { display: none; }
     .menu-button { display: grid; }

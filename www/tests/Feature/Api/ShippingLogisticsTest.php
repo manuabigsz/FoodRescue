@@ -97,6 +97,73 @@ class ShippingLogisticsTest extends TestCase
     }
 
     /** @return array{0: Trade, 1: User} */
+    public function test_carrier_sees_and_revises_its_own_pending_quotation(): void
+    {
+        PlatformSetting::query()->updateOrCreate(['key' => PlatformSetting::SHIPPING_QUOTATION_TIMEOUT], ['value' => '240']);
+        [$trade, $buyer] = $this->reservedTrade();
+        $carrier = User::factory()->withRole(UserRole::Carrier)->create();
+        $rival = User::factory()->withRole(UserRole::Carrier)->create();
+
+        Sanctum::actingAs($buyer);
+        $shippingId = $this->postJson('/api/v1/trades/'.$trade->id.'/shipping', $this->destination())->assertCreated()->json('data.id');
+
+        Sanctum::actingAs($carrier);
+        $offerId = $this->postJson('/api/v1/shipping-requests/'.$shippingId.'/offers', $this->quotation('480.000000'))
+            ->assertCreated()->json('data.id');
+
+        $listed = $this->getJson('/api/v1/shipping-requests')->assertOk()->json('data.0.offers');
+        $this->assertCount(1, $listed);
+        $this->assertSame($offerId, $listed[0]['id']);
+
+        Sanctum::actingAs($rival);
+        $this->assertCount(0, $this->getJson('/api/v1/shipping-requests')->assertOk()->json('data.0.offers'));
+
+        Sanctum::actingAs($carrier);
+        $this->patchJson('/api/v1/shipping-offers/'.$offerId, $this->quotation('390.000000'))
+            ->assertOk()
+            ->assertJsonPath('data.id', $offerId)
+            ->assertJsonPath('data.amount', '390.000000');
+        $this->assertDatabaseCount('shipping_offers', 1);
+
+        $this->postJson('/api/v1/shipping-requests/'.$shippingId.'/offers', $this->quotation('300.000000'))
+            ->assertStatus(409);
+    }
+
+    public function test_quotation_cannot_be_revised_by_another_carrier_or_after_being_selected(): void
+    {
+        PlatformSetting::query()->updateOrCreate(['key' => PlatformSetting::SHIPPING_QUOTATION_TIMEOUT], ['value' => '240']);
+        PlatformSetting::query()->updateOrCreate(['key' => PlatformSetting::PAYMENT_TIMEOUT], ['value' => '15']);
+        [$trade, $buyer] = $this->reservedTrade();
+        $carrier = User::factory()->withRole(UserRole::Carrier)->create();
+        $rival = User::factory()->withRole(UserRole::Carrier)->create();
+
+        Sanctum::actingAs($buyer);
+        $shippingId = $this->postJson('/api/v1/trades/'.$trade->id.'/shipping', $this->destination())->assertCreated()->json('data.id');
+
+        Sanctum::actingAs($carrier);
+        $offerId = $this->postJson('/api/v1/shipping-requests/'.$shippingId.'/offers', $this->quotation('480.000000'))->assertCreated()->json('data.id');
+
+        Sanctum::actingAs($rival);
+        $this->patchJson('/api/v1/shipping-offers/'.$offerId, $this->quotation('100.000000'))->assertForbidden();
+
+        Sanctum::actingAs($buyer);
+        $this->postEmptyJson('/api/v1/trades/'.$trade->id.'/shipping-offers/'.$offerId.'/select')->assertOk();
+
+        Sanctum::actingAs($carrier);
+        $this->patchJson('/api/v1/shipping-offers/'.$offerId, $this->quotation('100.000000'))->assertStatus(409);
+        $this->assertDatabaseHas('shipping_offers', ['id' => $offerId, 'amount' => '480.000000']);
+    }
+
+    /** @return array<string, string> */
+    private function quotation(string $amount): array
+    {
+        return [
+            'amount' => $amount,
+            'pickup_at' => now()->addHour()->toISOString(),
+            'estimated_delivery_at' => now()->addHours(5)->toISOString(),
+        ];
+    }
+
     private function reservedTrade(): array
     {
         $lot = SurplusLot::factory()->create();

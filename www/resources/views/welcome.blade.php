@@ -16,12 +16,8 @@
                 <span class="brand-mark" aria-hidden="true"><img src="/images/foodrescue-logo.png" alt=""></span>
                 <span>Food<span>Rescue</span></span>
             </a>
-            <nav class="desktop-nav" aria-label="Navegação principal">
-                <a href="#/catalogo" data-nav="catalogo">Excedentes</a>
-                <a href="#/doacoes" data-nav="doacoes">Doações</a>
-                <a href="#/acompanhamento" data-nav="acompanhamento">Acompanhar</a>
-                <a href="#/rede" data-nav="rede">Solana</a>
-            </nav>
+            {{-- Os itens variam por papel e são montados em core/navigation.js. --}}
+            <nav class="desktop-nav" aria-label="Navegação principal" data-nav-desktop></nav>
             <div class="header-actions">
                 <span class="network-chip"><i></i> Devnet</span>
                 <button class="button button-ghost wallet-button" type="button" data-open-auth>Conectar carteira</button>
@@ -30,7 +26,7 @@
             </div>
         </header>
         <nav class="mobile-nav" id="mobile-nav" aria-label="Navegação móvel" hidden>
-            <a href="#/catalogo">Excedentes</a><a href="#/doacoes">Doações</a><a href="#/acompanhamento">Acompanhar</a><a href="#/rede">Solana</a><a href="#/dashboard">Meu painel</a><button class="mobile-nav-action" type="button" data-logout hidden>Sair</button>
+            <div data-nav-mobile></div><button class="mobile-nav-action" type="button" data-logout hidden>Sair</button>
         </nav>
         <main id="main-content" tabindex="-1" aria-live="polite"></main>
         <footer class="site-footer">
