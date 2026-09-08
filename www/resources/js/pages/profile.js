@@ -50,7 +50,11 @@ export async function renderProfile() {
             : 'Nenhuma carteira vinculada a esta conta.') + '</p>' +
         '<p class="footer-note">A troca exige assinar uma mensagem de comprovação. Nunca pedimos sua chave privada.</p>' +
         '<div class="action-bar"><button class="button button-small button-ghost" type="button" data-change-wallet>' + (user.solana_wallet_address ? 'Trocar carteira' : 'Vincular carteira') + '</button></div>' +
-        '<p class="form-message" data-wallet-message></p></article>';
+        '<p class="form-message" data-wallet-message></p></article>' +
+        '<article class="panel" style="margin-top:1rem"><h2>Sessões</h2>' +
+        '<p>Encerrar todas as sessões revoga os tokens de todos os dispositivos, inclusive este. Use se suspeitar que alguém teve acesso à sua conta.</p>' +
+        '<div class="action-bar"><button class="button button-small button-ghost" type="button" data-logout-all>Sair de todas as sessões</button></div>' +
+        '<p class="form-message" data-sessions-message></p></article>';
 
     target.querySelector('[data-account-form]').addEventListener('submit', async function (event) {
         event.preventDefault();
@@ -104,8 +108,23 @@ export async function renderProfile() {
         }
     });
 
+    target.querySelector('[data-logout-all]').addEventListener('click', async function (event) {
+        const message = target.querySelector('[data-sessions-message]');
+        message.textContent = '';
+        event.currentTarget.disabled = true;
+        try {
+            await api('/auth/logout-all', { method: 'POST' });
+            clearSession();
+            toast('Todas as sessões foram encerradas.');
+            location.hash = '#/';
+        } catch (error) {
+            message.textContent = error.message;
+            event.currentTarget.disabled = false;
+        }
+    });
+
     target.querySelector('[data-change-wallet]').addEventListener('click', async function (event) {
-        const message = document.querySelector('[data-wallet-message]');
+        const message = target.querySelector('[data-wallet-message]');
         message.textContent = '';
         event.currentTarget.disabled = true;
         try {
