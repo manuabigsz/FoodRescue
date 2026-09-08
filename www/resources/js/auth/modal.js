@@ -1,5 +1,6 @@
 import { api } from '../core/api.js';
 import { esc, short, uint8ToBase64 } from '../core/format.js';
+import { bindPhoneMasks, stateOptions } from '../core/form-fields.js';
 import { setSession } from '../core/session.js';
 import { state } from '../core/state.js';
 import { modal, toast } from '../core/ui.js';
@@ -34,16 +35,17 @@ export function selectAuthTab(tab) {
     document.querySelectorAll('[data-auth-panel]').forEach(function (panel) { panel.hidden = panel.dataset.authPanel !== tab; });
 }
 
-export function walletCard() {
+export function walletCard(required = false) {
     const address = state.wallet ? short(state.wallet, 7, 6) : 'Phantom ou carteira compatível';
-    return '<div class="wallet-connect-card"><strong>' + (state.wallet ? 'Carteira conectada: ' + esc(address) : 'Conecte sua carteira Solana') + '</strong><p>Compartilhamos somente o endereço público. Para o cadastro, você assinará uma mensagem de comprovação.</p><button class="button button-ghost button-full" type="button" data-connect-wallet>' + (state.wallet ? 'Trocar carteira' : 'Conectar carteira') + '</button></div>';
+    const requirement = required ? '<p><strong>Obrigatória para criar a conta.</strong> Esta regra vale para produtor, comprador, transportadora e ONG / instituição social.</p>' : '';
+    return '<div class="wallet-connect-card"' + (required ? ' data-wallet-required' : '') + '><strong>' + (state.wallet ? 'Carteira conectada: ' + esc(address) : 'Conecte sua carteira Solana') + '</strong><p>Compartilhamos somente o endereço público. Para o cadastro, você assinará uma mensagem de comprovação.</p>' + requirement + '<button class="button button-ghost button-full" type="button" data-connect-wallet>' + (state.wallet ? 'Trocar carteira' : 'Conectar carteira') + '</button></div>';
 }
 
 export function renderAuthPanels() {
     const login = document.querySelector('[data-auth-panel="login"]');
     const register = document.querySelector('[data-auth-panel="register"]');
     login.innerHTML = walletCard() + '<div class="form-divider">acesso à conta</div><form class="form-grid" data-login-form><div class="field"><label for="login-email">E-mail</label><input id="login-email" name="email" type="email" autocomplete="email" required></div><div class="field"><label for="login-password">Senha</label><input id="login-password" name="password" type="password" autocomplete="current-password" required></div><button class="button button-full" type="submit">Entrar no FoodRescue</button><p class="form-message" data-form-message></p></form>';
-    register.innerHTML = walletCard() + '<form class="form-grid" data-register-form><div class="field-row"><div class="field"><label for="reg-name">Nome</label><input id="reg-name" name="name" required maxlength="120"></div><div class="field"><label for="reg-email">E-mail</label><input id="reg-email" name="email" type="email" required></div></div><div class="field"><label for="reg-role">Como você participa?</label><select id="reg-role" name="role"><option value="producer">Produtor</option><option value="buyer">Comprador</option><option value="carrier">Transportadora</option><option value="ngo">ONG / Instituição social</option></select></div><div data-profile-fields></div><div class="field-row"><div class="field"><label for="reg-password">Senha</label><input id="reg-password" name="password" type="password" autocomplete="new-password" required minlength="12"></div><div class="field"><label for="reg-password-confirmation">Confirmar senha</label><input id="reg-password-confirmation" name="password_confirmation" type="password" autocomplete="new-password" required></div></div><button class="button button-full" type="submit">Assinar e criar conta</button><p class="form-message" data-form-message></p></form>';
+    register.innerHTML = walletCard(true) + '<form class="form-grid" data-register-form><div class="field-row"><div class="field"><label for="reg-name">Nome</label><input id="reg-name" name="name" required maxlength="120"></div><div class="field"><label for="reg-email">E-mail</label><input id="reg-email" name="email" type="email" required></div></div><div class="field"><label for="reg-role">Como você participa?</label><select id="reg-role" name="role"><option value="producer">Produtor</option><option value="buyer">Comprador</option><option value="carrier">Transportadora</option><option value="ngo">ONG / Instituição social</option></select></div><div data-profile-fields></div><div class="field-row"><div class="field"><label for="reg-password">Senha</label><input id="reg-password" name="password" type="password" autocomplete="new-password" required minlength="6"></div><div class="field"><label for="reg-password-confirmation">Confirmar senha</label><input id="reg-password-confirmation" name="password_confirmation" type="password" autocomplete="new-password" required minlength="6"></div></div><button class="button button-full" type="submit">Assinar e criar conta</button><p class="form-message" data-form-message></p></form>';
     bindAuthForms();
     paintProfileFields('producer');
 }
@@ -56,7 +58,8 @@ export function paintProfileFields(role) {
     if (role === 'buyer') specific = '<div class="field-row"><div class="field"><label>Tipo de comprador</label><select name="buyer_type"><option value="individual">Pessoa física</option><option value="company">Empresa</option></select></div><div class="field"><label>Organização (se empresa)</label><input name="organization_name"></div></div>';
     if (role === 'carrier') specific = '<div class="field-row"><div class="field"><label>Empresa</label><input name="company_name" required></div><div class="field"><label>Responsável</label><input name="contact_name" required></div></div><div class="field"><label>Regiões atendidas</label><input name="service_regions" placeholder="São Paulo, Campinas" required></div>';
     if (role === 'ngo') specific = '<div class="field-row"><div class="field"><label>Organização</label><input name="organization_name" required></div><div class="field"><label>Número de registro</label><input name="registration_number" required></div></div><div class="field"><label>Responsável</label><input name="contact_name" required></div>';
-    target.innerHTML = specific + '<div class="field-row"><div class="field"><label>Telefone</label><input name="phone" required></div><div class="field"><label>Documento</label><input name="document_number"' + (role === 'ngo' ? '' : ' required') + '></div></div><div class="field-row"><div class="field"><label>Cidade</label><input name="city" required></div><div class="field"><label>Estado</label><input name="state" required maxlength="100"></div></div><div class="field"><label>Endereço</label><input name="address_line" required></div>';
+    target.innerHTML = specific + '<div class="field-row"><div class="field"><label>Telefone</label><input name="phone" data-phone-mask autocomplete="tel" required></div><div class="field"><label>Documento</label><input name="document_number"' + (role === 'ngo' ? '' : ' required') + '></div></div><div class="field-row"><div class="field"><label>Cidade</label><input name="city" required></div><div class="field"><label>Estado</label><select name="state" required>' + stateOptions() + '</select></div></div><div class="field"><label>Endereço</label><input name="address_line" required></div>';
+    bindPhoneMasks(target);
 }
 
 export function bindAuthForms() {

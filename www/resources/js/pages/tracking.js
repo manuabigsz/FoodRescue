@@ -1,7 +1,7 @@
 import { openAuthOrDashboard } from '../auth/modal.js';
 import { api } from '../core/api.js';
 import { config } from '../core/config.js';
-import { esc, formatDateTime, money } from '../core/format.js';
+import { esc, formatDateTime, money, quantityValue } from '../core/format.js';
 import { nextActions, statusLabels, timelineSteps } from '../core/labels.js';
 import { state } from '../core/state.js';
 import { detailCell, setPage, solscanAddress } from '../core/ui.js';
@@ -11,7 +11,7 @@ export function tradeTitle(trade) {
     const product = trade.surplus_lot?.product?.name;
     if (!product) return (trade.is_donation ? 'Doação' : 'Compra') + ' #' + trade.id;
 
-    return product + ' · ' + trade.surplus_lot.quantity + ' ' + trade.surplus_lot.unit;
+    return product + ' · ' + quantityValue(trade.surplus_lot.quantity) + ' ' + trade.surplus_lot.unit;
 }
 
 export function tradeRoute(trade) {
@@ -73,6 +73,7 @@ export function paintTracking(trade) {
     const closed = trade.status === 'cancelled' || trade.status === 'expired';
     const shipping = trade.shipping_request;
     const carrier = shipping?.selected_offer;
+    const product = trade.surplus_lot?.product?.name || trade.surplus_lot?.agricultural_product?.name || (trade.is_donation ? 'Doação de excedente' : 'Compra de excedente');
     const onChain = trade.blockchain?.trade_pda || config.programId;
 
     target.innerHTML =
@@ -82,7 +83,7 @@ export function paintTracking(trade) {
                     '<strong>#' + item.id + '</strong><span>' + esc(tradeTitle(item)) + '</span><small>' + esc(statusLabels[item.status] || item.status) + '</small></button>';
             }).join('') + '</div>'
             : '') +
-        '<article class="timeline-card"><div class="trade-summary"><div><h2>Operação #' + trade.id + '</h2><p>' + (trade.is_donation ? 'Doação de excedente' : 'Compra de excedente') + ' · ' + esc(tradeRoute(trade)) + '</p></div><span class="status-pill">' + esc(statusLabels[trade.status] || trade.status) + '</span></div>' +
+        '<article class="timeline-card"><div class="trade-summary"><div><h2>Operação #' + trade.id + ' · ' + esc(product) + '</h2><p>' + (trade.is_donation ? 'Doação de excedente' : 'Compra de excedente') + ' · ' + esc(tradeRoute(trade)) + '</p></div><span class="status-pill">' + esc(statusLabels[trade.status] || trade.status) + '</span></div>' +
         (closed
             ? '<p class="demo-banner"><span>' + esc(nextActions[trade.status]) + (trade.cancellation_reason ? ' Motivo: ' + esc(trade.cancellation_reason) : '') + '</span></p>'
             : '<div class="timeline">' + steps.map(function (step, index) {

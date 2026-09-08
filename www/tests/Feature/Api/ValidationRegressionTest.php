@@ -96,6 +96,25 @@ class ValidationRegressionTest extends TestCase
         $this->assertSame(2, $lot->trades()->count());
     }
 
+    public function test_trade_listing_synchronizes_an_expired_payment_window(): void
+    {
+        $lot = SurplusLot::factory()->create();
+        $buyer = User::factory()->withRole(UserRole::Buyer)->create();
+        $trade = app(SurplusMarketplace::class)->buyNow($buyer, $lot);
+        $trade->update([
+            'status' => TradeStatus::WaitingPayment,
+            'payment_expires_at' => now()->subSecond(),
+        ]);
+
+        Sanctum::actingAs($buyer);
+        $this->getJson('/api/v1/trades')
+            ->assertOk()
+            ->assertJsonPath('data.0.status', TradeStatus::Expired->value);
+
+        $this->assertSame(TradeStatus::Expired, $trade->fresh()->status);
+        $this->assertSame(SurplusStatus::Open, $lot->fresh()->status);
+    }
+
     public function test_timeout_preserves_a_prepared_or_initialized_escrow_reservation(): void
     {
         foreach ([false, true] as $initialized) {

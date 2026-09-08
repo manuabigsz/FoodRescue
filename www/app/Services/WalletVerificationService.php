@@ -23,6 +23,26 @@ class WalletVerificationService
         return $this->createChallenge($user, $walletAddress, WalletChallenge::PURPOSE_VERIFY);
     }
 
+    /** @return array{id:int,wallet_address:string,message:string,expires_at:string} */
+    public function createSurplusPublicationChallenge(User $user): array
+    {
+        if (! $user->solana_wallet_address || ! $user->solana_wallet_verified_at) {
+            throw ValidationException::withMessages(['wallet' => 'O produtor precisa ter uma carteira Solana verificada.']);
+        }
+
+        return $this->createChallenge($user, $user->solana_wallet_address, WalletChallenge::PURPOSE_SURPLUS_PUBLICATION);
+    }
+
+    public function consumeSurplusPublicationChallenge(User $user, int $challengeId, string $signature): void
+    {
+        DB::transaction(function () use ($user, $challengeId, $signature): void {
+            $challenge = WalletChallenge::whereKey($challengeId)->lockForUpdate()->first();
+            $this->assertUsable($challenge, (string) $user->solana_wallet_address, WalletChallenge::PURPOSE_SURPLUS_PUBLICATION, $user->id);
+            $this->assertSignature($challenge, $signature);
+            $challenge->update(['used_at' => now()]);
+        }, 3);
+    }
+
     public function consumeRegistrationChallenge(int $challengeId, string $walletAddress, string $signature): void
     {
         DB::transaction(function () use ($challengeId, $walletAddress, $signature): void {

@@ -41,8 +41,8 @@ export async function renderProfile() {
         '<button class="button button-small" type="submit">Salvar dados</button><p class="form-message" data-form-message></p></form></article>' +
         '<article class="panel"><h2>Senha</h2>' +
         '<form class="form-grid" data-password-form><div class="field"><label for="pwd-current">Senha atual</label><input id="pwd-current" name="current_password" type="password" autocomplete="current-password" required></div>' +
-        '<div class="field"><label for="pwd-new">Nova senha (mínimo 15 caracteres)</label><input id="pwd-new" name="password" type="password" autocomplete="new-password" minlength="15" required></div>' +
-        '<div class="field"><label for="pwd-confirm">Confirmar nova senha</label><input id="pwd-confirm" name="password_confirmation" type="password" autocomplete="new-password" required></div>' +
+        '<div class="field"><label for="pwd-new">Nova senha (mínimo 6 caracteres)</label><input id="pwd-new" name="password" type="password" autocomplete="new-password" minlength="6" required></div>' +
+        '<div class="field"><label for="pwd-confirm">Confirmar nova senha</label><input id="pwd-confirm" name="password_confirmation" type="password" autocomplete="new-password" minlength="6" required></div>' +
         '<button class="button button-small" type="submit">Trocar senha</button><p class="form-message" data-form-message></p></form></article></div>' +
         '<article class="panel" style="margin-top:1rem"><h2>Carteira Solana</h2>' +
         '<p>' + (user.solana_wallet_address

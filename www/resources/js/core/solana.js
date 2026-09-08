@@ -47,6 +47,16 @@ export function walletAvailable() {
     return Boolean(window.solana && typeof window.solana.connect === 'function');
 }
 
+/** Deriva o PDA administrativo do protocolo a partir da authority conectada. */
+export async function protocolConfigAddress(programId, authority) {
+    const { PublicKey } = await web3();
+
+    return PublicKey.findProgramAddressSync(
+        [new TextEncoder().encode('foodrescue_protocol'), new PublicKey(authority).toBytes()],
+        new PublicKey(programId),
+    )[0].toBase58();
+}
+
 /**
  * Devolve o endereço conectado. `onlyIfTrusted` reaproveita uma autorização
  * anterior sem abrir o popup; se não houver, pede a conexão.
@@ -290,12 +300,25 @@ async function sendThroughWallet(provider, connection, transaction) {
  * preservando o original quando não é um caso conhecido.
  */
 export function walletErrorMessage(error) {
-    const message = error?.message || 'Não foi possível assinar a transação.';
+    const details = [
+        error?.message,
+        error?.data?.message,
+        error?.error?.message,
+        Array.isArray(error?.logs) ? error.logs.join(' ') : null,
+    ].filter(Boolean).join(' ');
+    const message = details || 'Não foi possível assinar a transação.';
     if (error?.code === 4001 || /user rejected|rejected the request/i.test(message)) {
         return 'Assinatura cancelada na carteira.';
     }
-    if (/insufficient|0x1\b/i.test(message)) {
+    if (/insufficient|not enough funds|insufficient lamports|attempt to debit an account|custom program error:\s*0x1\b|0x1\b/i.test(message)) {
         return 'Saldo insuficiente na carteira para esta transação. Verifique o SOL das taxas e o saldo em FRUSD.';
+    }
+
+    // Algumas extensões escondem o motivo real e retornam somente “Unexpected
+    // error”. Ainda assim, a orientação deve ajudar o usuário a corrigir os
+    // pré-requisitos mais comuns sem expor a mensagem técnica da carteira.
+    if (/unexpected error|transaction failed|simulation failed|failed to send/i.test(message)) {
+        return 'Não foi possível concluir a transação. Confira se sua carteira tem SOL para as taxas e FRUSD suficiente para o pagamento e tente novamente.';
     }
 
     return message;

@@ -17,6 +17,38 @@ describe('catálogo de excedentes', () => {
         expect(document.querySelector('.demo-banner')).toBeNull();
     });
 
+    it('não mostra ações comerciais para o produtor dono do lote', async () => {
+        await bootApp({
+            hash: '#/catalogo',
+            session: { user: sampleUser },
+            routes: {
+                'GET /auth/me': { data: sampleUser },
+                'GET /surplus': paginated([lot({ producer: { id: sampleUser.id, name: sampleUser.name }, donation_eligible: true })]),
+            },
+        });
+
+        expect(document.querySelector('[data-buy="1"]')).toBeNull();
+        expect(document.querySelector('[data-donate="1"]')).toBeNull();
+        expect(document.querySelector('[data-lot-card]').textContent).toContain('Este lote pertence a você.');
+    });
+
+    it('formata quantidades decimais sem transformar 150.000 em 150000', async () => {
+        await bootApp({
+            hash: '#/catalogo',
+            session: { user: { ...sampleUser, roles: ['buyer'] } },
+            routes: {
+                'GET /auth/me': { data: { ...sampleUser, roles: ['buyer'] } },
+                'GET /surplus': paginated([lot({ quantity: '150.000', unit: 'unit' }), lot({ id: 2, quantity: '120.000', unit: 'kg' })]),
+            },
+        });
+
+        const text = document.querySelector('[data-catalog]').textContent;
+        expect(text).toContain('150 unit');
+        expect(text).toContain('120 kg');
+        expect(text).not.toContain('150.000 unit');
+        expect(text).not.toContain('120.000 kg');
+    });
+
     it('envia os filtros para a API em vez de filtrar na tela', async () => {
         const { calls } = await bootApp({
             hash: '#/catalogo',
@@ -70,7 +102,7 @@ describe('catálogo de excedentes', () => {
         expect(calls.filter((call) => call.path === '/surplus').at(-1).query).toContain('page=2');
     });
 
-    it('avisa que os lotes são demonstração quando a API recusa', async () => {
+    it('não inventa lotes quando a API recusa e oferece nova tentativa', async () => {
         await bootApp({
             hash: '#/catalogo',
             session: { user: { ...sampleUser, roles: ['buyer'] } },
@@ -80,31 +112,31 @@ describe('catálogo de excedentes', () => {
             },
         });
 
-        const banner = document.querySelector('.demo-banner');
+        const banner = document.querySelector('.catalog-alert');
         expect(banner).not.toBeNull();
-        expect(banner.textContent).toContain('Serviço indisponível.');
-        expect(document.querySelectorAll('[data-lot-card]').length).toBeGreaterThan(0);
+        expect(banner.textContent).toContain('Não foi possível carregar');
+        expect(document.querySelector('[data-retry-catalog]')).not.toBeNull();
+        expect(document.querySelectorAll('[data-lot-card]')).toHaveLength(0);
     });
 
-    it('visitante anônimo não chama a API e recebe o aviso de autenticação', async () => {
+    it('visitante anônimo não vê dados fictícios e recebe o convite para entrar', async () => {
         const { calls } = await bootApp({ hash: '#/catalogo' });
 
         expect(calls.filter((call) => call.path === '/surplus')).toHaveLength(0);
-        expect(document.querySelector('.demo-banner').textContent).toContain('exige autenticação');
-        expect(document.querySelector('.demo-banner [data-open-auth]')).not.toBeNull();
+        expect(document.querySelector('.catalog-alert').textContent).toContain('excedentes reais');
+        expect(document.querySelector('.catalog-alert [data-open-auth]')).not.toBeNull();
     });
 
-    it('comprar em modo demonstração não dispara requisição', async () => {
+    it('não permite comprar quando os dados reais não foram carregados', async () => {
         const { calls } = await bootApp({
             hash: '#/catalogo',
             session: { user: { ...sampleUser, roles: ['buyer'] } },
             routes: { 'GET /auth/me': { data: sampleUser }, 'GET /surplus': { status: 500, body: {} } },
         });
 
-        await click('[data-buy]');
-
         expect(calls.some((call) => call.path.includes('buy-now'))).toBe(false);
-        expect(document.querySelector('.toast').textContent).toContain('demonstração');
+        expect(document.querySelectorAll('[data-lot-card]')).toHaveLength(0);
+        expect(document.querySelector('[data-retry-catalog]')).not.toBeNull();
     });
 
     it('comprar com dados reais chama buy-now e vai para o acompanhamento', async () => {

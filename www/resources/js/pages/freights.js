@@ -1,5 +1,6 @@
 import { api } from '../core/api.js';
-import { esc, formatDateTime, localDateTimeValue, money } from '../core/format.js';
+import { esc, formatDateTime, localDateTimeValue, money, quantityValue } from '../core/format.js';
+import { bindUsdMasks, formatUsd, normalizeUsd } from '../core/form-fields.js';
 import { currentRole } from '../core/session.js';
 import { state } from '../core/state.js';
 import { setPage, toast } from '../core/ui.js';
@@ -50,7 +51,7 @@ function quoteFields(request) {
     const agora = localDateTimeValue(new Date());
 
     return '<div class="field-row"><div class="field"><label for="amount-' + request.id + '">Valor do frete (FRUSD)</label>' +
-        '<input id="amount-' + request.id + '" name="amount" type="number" step="0.000001" min="0.000001" placeholder="0,00" value="' + (enviada ? esc(enviada.amount) : '') + '" required></div>' +
+        '<input id="amount-' + request.id + '" name="amount" data-usd-mask placeholder="US$ 0.00" value="' + (enviada ? esc(formatUsd(enviada.amount)) : '') + '" required></div>' +
         '<div class="field"><label for="pickup-' + request.id + '">Coleta em</label>' +
         '<input id="pickup-' + request.id + '" name="pickup_at" type="datetime-local" value="' + padrao.pickup + '" min="' + agora + '" required></div></div>' +
         '<div class="field-row"><div class="field"><label for="delivery-' + request.id + '">Previsão de entrega</label>' +
@@ -121,7 +122,7 @@ export async function renderFreights() {
 
     target.innerHTML = requests.map(function (request) {
         return '<article class="panel freight-card"><div class="trade-summary"><div><h2>' + esc(request.origin.city) + ' → ' + esc(request.destination.city) + '</h2>' +
-            '<p>' + esc(request.quantity) + ' ' + esc(request.unit) + ' · operação #' + request.trade_id + ' · cotações até ' + esc(formatDateTime(request.quotation_expires_at)) + '</p></div></div>' +
+            '<p>' + esc(quantityValue(request.quantity)) + ' ' + esc(request.unit) + ' · operação #' + request.trade_id + ' · cotações até ' + esc(formatDateTime(request.quotation_expires_at)) + '</p></div></div>' +
             (minhaCotacao(request)
                 ? '<p class="quote-status">Sua cotação de <strong>' + money(minhaCotacao(request).amount) + ' FRUSD</strong> foi enviada e aguarda decisão do destinatário. Você pode revisá-la enquanto ela não for escolhida.</p>'
                 : '') +
@@ -129,6 +130,7 @@ export async function renderFreights() {
             '<button class="button button-small" type="submit">' + (minhaCotacao(request) ? 'Atualizar cotação' : 'Enviar cotação') + '</button><p class="form-message" data-form-message></p></form></article>';
     }).join('');
 
+    bindUsdMasks(target);
     target.querySelectorAll('[data-freight-form]').forEach(function (form) {
         const refresh = bindQuoteDates(form);
 
@@ -153,7 +155,7 @@ export async function renderFreights() {
                 await api(existente ? '/shipping-offers/' + existente : '/shipping-requests/' + form.dataset.freightForm + '/offers', {
                     method: existente ? 'PATCH' : 'POST',
                     body: JSON.stringify({
-                        amount: fields.get('amount'),
+                        amount: normalizeUsd(fields.get('amount')),
                         pickup_at: new Date(fields.get('pickup_at')).toISOString(),
                         estimated_delivery_at: new Date(fields.get('estimated_delivery_at')).toISOString(),
                     }),

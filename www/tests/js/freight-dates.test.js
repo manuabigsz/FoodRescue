@@ -98,7 +98,7 @@ describe('datas da cotação de frete', () => {
         expect(hint.textContent).toBe('A entrega precisa ser depois da coleta');
         expect(hint.classList.contains('invalid')).toBe(true);
 
-        form.querySelector('[name="amount"]').value = '480';
+        form.querySelector('[name="amount"]').value = 'US$ 480.00';
         form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
         await flush();
 
@@ -112,7 +112,7 @@ describe('datas da cotação de frete', () => {
 
         pickup.value = local(new Date(Date.now() - 3600000));
         delivery.value = local(new Date(Date.now() + 3600000));
-        form.querySelector('[name="amount"]').value = '480';
+        form.querySelector('[name="amount"]').value = 'US$ 480.00';
         form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
         await flush();
 
@@ -124,7 +124,7 @@ describe('datas da cotação de frete', () => {
         const { calls } = await boot({ 'POST /shipping-requests/5/offers': { status: 201, body: { data: { id: 9 } } } });
         const { form, pickup, delivery } = campos();
 
-        form.querySelector('[name="amount"]').value = '480';
+        form.querySelector('[name="amount"]').value = 'US$ 480.00';
         form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
         await flush();
 
@@ -161,7 +161,7 @@ describe('cotação já enviada', () => {
         const { form } = campos();
 
         expect(document.querySelector('.quote-status').textContent).toContain('480,00 FRUSD');
-        expect(form.querySelector('[name=amount]').value).toBe('480.000000');
+        expect(form.querySelector('[name=amount]').value).toBe('US$ 480.000000');
         expect(form.querySelector('[type=submit]').textContent).toBe('Atualizar cotação');
     });
 
@@ -177,13 +177,13 @@ describe('cotação já enviada', () => {
         const { calls } = await comCotacao({ 'PATCH /shipping-offers/9': { data: { ...enviada, amount: '390.000000' } } });
         const { form } = campos();
 
-        form.querySelector('[name=amount]').value = '390';
+        form.querySelector('[name=amount]').value = 'US$ 390.00';
         form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
         await flush();
 
         const patch = calls.find((call) => call.method === 'PATCH');
         expect(patch.path).toBe('/shipping-offers/9');
-        expect(patch.body.amount).toBe('390');
+        expect(patch.body.amount).toBe('390.00');
         expect(calls.some((call) => call.method === 'POST' && call.path.includes('/offers'))).toBe(false);
     });
 
@@ -191,7 +191,7 @@ describe('cotação já enviada', () => {
         const { calls } = await boot({ 'POST /shipping-requests/5/offers': { status: 201, body: { data: { id: 9 } } } });
         const { form } = campos();
 
-        form.querySelector('[name=amount]').value = '480';
+        form.querySelector('[name=amount]').value = 'US$ 480.00';
         form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
         await flush();
 

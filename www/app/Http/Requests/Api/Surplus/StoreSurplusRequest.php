@@ -5,6 +5,7 @@ namespace App\Http\Requests\Api\Surplus;
 use App\Enums\LogisticsMode;
 use App\Enums\SurplusUnit;
 use App\Http\Requests\Api\ApiRequest;
+use App\Rules\SolanaSignature;
 use Illuminate\Validation\Rule;
 
 class StoreSurplusRequest extends ApiRequest
@@ -12,6 +13,8 @@ class StoreSurplusRequest extends ApiRequest
     public function rules(): array
     {
         return [
+            'wallet_challenge_id' => ['required', 'integer', 'min:1'],
+            'wallet_signature' => ['required', new SolanaSignature],
             'agricultural_product_id' => ['required', 'integer', Rule::exists('agricultural_products', 'id')->where('active', true)],
             'quality_grade_id' => ['nullable', 'integer', Rule::exists('quality_grades', 'id')->where('active', true)],
             'quantity' => ['required', 'numeric', 'gt:0', 'max:99999999999.999', 'decimal:0,3'],

@@ -42,6 +42,7 @@ const MENUS = {
         { nav: 'admin-usuarios', hash: '#/admin?tab=usuarios', label: 'Usuários' },
         { nav: 'admin-catalogo', hash: '#/admin?tab=catalogo', label: 'Catálogo' },
         { nav: 'admin-ajustes', hash: '#/admin?tab=ajustes', label: 'Prazos' },
+        { nav: 'admin-solana', hash: '#/admin?tab=solana', label: 'Solana' },
     ],
 };
 

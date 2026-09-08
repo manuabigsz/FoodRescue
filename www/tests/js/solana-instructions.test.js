@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createTokenAccountInstruction, derivedAddress, resolveAccounts } from '../../resources/js/core/solana.js';
+import { createTokenAccountInstruction, derivedAddress, resolveAccounts, walletErrorMessage } from '../../resources/js/core/solana.js';
 
 const PROGRAMA = 'Ex6CN32gBUH2JALUwbqyn8ZMwWmBNrrHa4sjDNMAm5sd';
 const TOKEN_PROGRAM = 'TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA';
@@ -77,5 +77,15 @@ describe('montagem das instruções on-chain', () => {
         ]);
         expect(instruction.keys[0]).toMatchObject({ isSigner: true, isWritable: true });
         expect(instruction.keys[1]).toMatchObject({ isSigner: false, isWritable: true });
+    });
+
+    it('traduz erro inesperado da carteira em orientação sobre saldo', () => {
+        expect(walletErrorMessage(new Error('Unexpected error'))).toContain('SOL para as taxas e FRUSD suficiente');
+    });
+
+    it('reconhece saldo insuficiente mesmo quando a carteira usa mensagem técnica', () => {
+        expect(walletErrorMessage(new Error('Attempt to debit an account but found no record of a prior credit.'))).toBe(
+            'Saldo insuficiente na carteira para esta transação. Verifique o SOL das taxas e o saldo em FRUSD.',
+        );
     });
 });

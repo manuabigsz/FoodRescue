@@ -13,7 +13,7 @@ São dois projetos independentes. O Laravel **prepara** as instruções on-chain
 
 ## Atores
 
-Produtor publica o excedente · Comprador compra ou ONG recebe como doação · Transportadora cota o frete · Administrador cuida do catálogo e dos prazos.
+Produtor assina e publica o excedente · Comprador compra ou ONG recebe como doação · Transportadora cota o frete · Administrador cuida do catálogo e dos prazos.
 
 ## Como rodar
 

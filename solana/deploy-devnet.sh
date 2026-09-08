@@ -65,7 +65,12 @@ command -v solana-keygen >/dev/null || die "CLI 'solana-keygen' não encontrada 
 
 # Alguns subcomandos da Solana CLI consultam o signer padrão mesmo quando
 # --keypair é informado em uma operação posterior.
-solana config set \
+SOLANA_CONFIG_ARGS=()
+if [[ -n "${SOLANA_CLI_CONFIG:-}" ]]; then
+    SOLANA_CONFIG_ARGS=(--config "$SOLANA_CLI_CONFIG")
+fi
+
+solana "${SOLANA_CONFIG_ARGS[@]}" config set \
     --url https://api.devnet.solana.com \
     --keypair "$DEPLOYER_KEYPAIR" >/dev/null
 

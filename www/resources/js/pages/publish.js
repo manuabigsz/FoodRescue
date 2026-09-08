@@ -1,10 +1,12 @@
 import { openAuthOrDashboard } from '../auth/modal.js';
 import { api } from '../core/api.js';
-import { esc, localDateTimeValue } from '../core/format.js';
+import { esc, localDateTimeValue, uint8ToBase64 } from '../core/format.js';
+import { bindUsdMasks, normalizeUsd, stateOptions } from '../core/form-fields.js';
 import { logisticsLabels, roleLabels, unitLabels } from '../core/labels.js';
 import { currentRole } from '../core/session.js';
 import { state } from '../core/state.js';
 import { setPage, toast } from '../core/ui.js';
+import { connectedWalletFor, walletAvailable } from '../core/solana.js';
 
 export async function loadReferenceCatalog() {
     if (state.referenceCatalog) return state.referenceCatalog;
@@ -52,6 +54,11 @@ export async function renderPublish() {
     }
 
     const tomorrow = new Date(Date.now() + 86400000);
+    const profileAddress = state.user?.profile || {};
+    const hasProfileAddress = Boolean(profileAddress.address_line || profileAddress.city || profileAddress.state);
+    const savedAddressOption = hasProfileAddress
+        ? '<option value="profile">Usar endereço cadastrado' + (profileAddress.city ? ' · ' + esc(profileAddress.city) : '') + (profileAddress.state ? '/' + esc(profileAddress.state) : '') + '</option>'
+        : '';
     target.innerHTML = '<form class="panel form-grid" data-publish-form>' +
         '<div class="field-row"><div class="field"><label for="product">Produto agrícola</label><select id="product" name="agricultural_product_id" required>' +
             reference.products.map(function (product) { return '<option value="' + product.id + '">' + esc(product.name) + '</option>'; }).join('') +
@@ -63,21 +70,31 @@ export async function renderPublish() {
         '<div class="field"><label for="unit">Unidade</label><select id="unit" name="unit">' +
             Object.keys(unitLabels).map(function (unit) { return '<option value="' + unit + '">' + unitLabels[unit] + '</option>'; }).join('') +
         '</select></div></div>' +
-        '<div class="field-row"><div class="field"><label for="asking-price">Preço pedido (FRUSD)</label><input id="asking-price" name="asking_price" type="number" step="0.000001" min="0" required></div>' +
-        '<div class="field"><label for="minimum-price">Preço mínimo aceito (opcional, privado)</label><input id="minimum-price" name="minimum_price" type="number" step="0.000001" min="0"></div></div>' +
+        '<div class="field-row"><div class="field"><label for="asking-price">Preço total do lote (FRUSD)</label><input id="asking-price" name="asking_price" data-usd-mask required><small class="field-note">Informe o valor de toda a quantidade cadastrada. Ex.: 150 ovos a US$ 1,20 cada = US$ 180,00.</small></div>' +
+        '<div class="field"><label for="minimum-price">Preço mínimo total aceito (opcional, privado)</label><input id="minimum-price" name="minimum_price" data-usd-mask></div></div>' +
         '<div class="field-row"><div class="field"><label for="harvest">Data da colheita</label><input id="harvest" name="harvest_date" type="date" value="' + new Date().toISOString().slice(0, 10) + '" required></div>' +
         '<div class="field"><label for="available">Disponível até</label><input id="available" name="available_until" type="datetime-local" value="' + localDateTimeValue(tomorrow) + '" required></div></div>' +
+        '<div class="field"><label for="origin-address-source">Origem do endereço</label><select id="origin-address-source" data-origin-address-source><option value="">Preencher livremente</option>' + savedAddressOption + '</select></div>' +
         '<div class="field"><label for="address">Endereço de origem</label><input id="address" name="origin_address" maxlength="255" required></div>' +
         '<div class="field-row"><div class="field"><label for="city">Cidade</label><input id="city" name="origin_city" maxlength="120" required></div>' +
-        '<div class="field"><label for="uf">Estado</label><input id="uf" name="origin_state" maxlength="80" required></div></div>' +
+        '<div class="field"><label for="uf">Estado</label><select id="uf" name="origin_state" required>' + stateOptions() + '</select></div></div>' +
         '<fieldset class="field"><legend>Modalidades de logística aceitas</legend>' +
             Object.keys(logisticsLabels).map(function (mode) {
                 return '<label class="check-line"><input type="checkbox" name="accepted_logistics_modes" value="' + mode + '" checked> ' + logisticsLabels[mode] + '</label>';
             }).join('') +
         '</fieldset>' +
         '<label class="check-line"><input type="checkbox" name="donation_eligible"> Aceito destinar este lote como doação a uma organização social</label>' +
-        '<button class="button" type="submit">Publicar excedente</button><p class="form-message" data-form-message></p></form>';
+        '<p class="footer-note">Ao publicar, sua carteira Solana assinará uma comprovação da autoria deste lote. A assinatura não movimenta fundos.</p>' +
+        '<button class="button" type="submit">Assinar e publicar excedente</button><p class="form-message" data-form-message></p></form>';
 
+    bindUsdMasks(target);
+    const addressSource = target.querySelector('[data-origin-address-source]');
+    addressSource?.addEventListener('change', function () {
+        if (addressSource.value !== 'profile') return;
+        target.querySelector('[name="origin_address"]').value = profileAddress.address_line || '';
+        target.querySelector('[name="origin_city"]').value = profileAddress.city || '';
+        target.querySelector('[name="origin_state"]').value = profileAddress.state || '';
+    });
     target.querySelector('[data-publish-form]').addEventListener('submit', handlePublish);
 }
 
@@ -106,15 +123,21 @@ export async function handlePublish(event) {
         origin_country: 'BR',
         harvest_date: fields.get('harvest_date'),
         available_until: new Date(fields.get('available_until')).toISOString(),
-        asking_price: fields.get('asking_price'),
+        asking_price: normalizeUsd(fields.get('asking_price')),
         donation_eligible: form.querySelector('[name="donation_eligible"]').checked,
         accepted_logistics_modes: modes,
     };
     if (fields.get('quality_grade_id')) payload.quality_grade_id = Number(fields.get('quality_grade_id'));
-    if (fields.get('minimum_price')) payload.minimum_price = fields.get('minimum_price');
+    if (fields.get('minimum_price')) payload.minimum_price = normalizeUsd(fields.get('minimum_price'));
 
     button.disabled = true;
     try {
+        if (!walletAvailable()) throw new Error('Nenhuma carteira Solana compatível foi encontrada no navegador. Conecte a carteira do produtor para assinar a publicação.');
+        await connectedWalletFor(state.user?.solana_wallet_address, 'produtor');
+        const challenge = await api('/auth/wallet/surplus-publication-challenge', { method: 'POST' });
+        const signed = await window.solana.signMessage(new TextEncoder().encode(challenge.message), 'utf8');
+        payload.wallet_challenge_id = challenge.id;
+        payload.wallet_signature = uint8ToBase64(signed.signature);
         const lot = await api('/surplus', { method: 'POST', body: JSON.stringify(payload) });
         toast('Excedente publicado. Lote #' + lot.id + ' está no catálogo.');
         state.catalogFilters.page = 1;

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { bootApp, click, flush, lot, paginated, sampleUser } from './helpers/boot.js';
 
 const producer = { ...sampleUser, roles: ['producer'] };
@@ -17,6 +17,27 @@ describe('publicar excedente', () => {
 
         expect(document.querySelector('#product').textContent).toContain('Tomate italiano');
         expect(document.querySelector('#grade').textContent).toContain('Tipo B');
+    });
+
+    it('permite preencher a origem com o endereço salvo no perfil', async () => {
+        const savedProducer = {
+            ...producer,
+            profile: { address_line: 'Sítio Boa Colheita, km 12', city: 'Mogi das Cruzes', state: 'SP' },
+        };
+        await bootApp({
+            hash: '#/publicar',
+            session: { user: savedProducer },
+            routes: { 'GET /auth/me': { data: savedProducer }, ...catalogRoutes },
+        });
+
+        const source = document.querySelector('[data-origin-address-source]');
+        expect(source.querySelector('[value="profile"]')).not.toBeNull();
+        source.value = 'profile';
+        source.dispatchEvent(new window.Event('change'));
+
+        expect(document.querySelector('[name="origin_address"]').value).toBe('Sítio Boa Colheita, km 12');
+        expect(document.querySelector('[name="origin_city"]').value).toBe('Mogi das Cruzes');
+        expect(document.querySelector('[name="origin_state"]').value).toBe('SP');
     });
 
     it('bloqueia quem não é produtor', async () => {
@@ -47,14 +68,24 @@ describe('publicar excedente', () => {
             routes: {
                 'GET /auth/me': { data: producer },
                 ...catalogRoutes,
+                'POST /auth/wallet/surplus-publication-challenge': { status: 201, body: { data: { id: 31, message: 'assine a publicação' } } },
                 'POST /surplus': { status: 201, body: { data: { id: 77 } } },
                 'GET /surplus': paginated([]),
             },
         });
 
         const form = document.querySelector('[data-publish-form]');
+        window.solana = {
+            isConnected: true,
+            connect: vi.fn(),
+            publicKey: { toString: () => producer.solana_wallet_address },
+            signMessage: vi.fn().mockResolvedValue({ signature: new Uint8Array([9]) }),
+        };
         form.querySelector('[name="quantity"]').value = '680';
-        form.querySelector('[name="asking_price"]').value = '2.35';
+        form.querySelector('[name="asking_price"]').value = '3500.00';
+        form.querySelector('[name="asking_price"]').dispatchEvent(new window.Event('input', { bubbles: true }));
+        form.querySelector('[name="minimum_price"]').value = '1800.00';
+        form.querySelector('[name="minimum_price"]').dispatchEvent(new window.Event('input', { bubbles: true }));
         form.querySelector('[name="origin_address"]').value = 'Zona Rural, km 12';
         form.querySelector('[name="origin_city"]').value = 'Mogi das Cruzes';
         form.querySelector('[name="origin_state"]').value = 'SP';
@@ -67,6 +98,10 @@ describe('publicar excedente', () => {
         expect(body.agricultural_product_id).toBe(3);
         expect(body.quality_grade_id).toBe(4);
         expect(body.origin_country).toBe('BR');
+        expect(body.asking_price).toBe('3500.00');
+        expect(body.minimum_price).toBe('1800.00');
+        expect(body.wallet_challenge_id).toBe(31);
+        expect(body.wallet_signature).toBe('CQ==');
         expect(body.donation_eligible).toBe(true);
         expect(body.accepted_logistics_modes).toEqual(['buyer_pickup', 'third_party_carrier']);
         expect(body.available_until).toMatch(/T.*Z$/);
@@ -96,6 +131,7 @@ describe('publicar excedente', () => {
             routes: {
                 'GET /auth/me': { data: producer },
                 ...catalogRoutes,
+                'POST /auth/wallet/surplus-publication-challenge': { status: 201, body: { data: { id: 32, message: 'assine a publicação' } } },
                 'POST /surplus': { status: 422, body: { message: 'Dados inválidos.', errors: { asking_price: ['O campo preço pedido deve ser um número.'] } } },
             },
         });

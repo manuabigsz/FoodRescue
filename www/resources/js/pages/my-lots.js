@@ -1,5 +1,6 @@
 import { api } from '../core/api.js';
-import { esc, formatDateTime, localDateTimeValue, money, numberChanged } from '../core/format.js';
+import { esc, formatDateTime, localDateTimeValue, money, numberChanged, quantityValue } from '../core/format.js';
+import { bindUsdMasks, formatUsd, normalizeUsd } from '../core/form-fields.js';
 import { offerStatusLabels, surplusStatusLabels } from '../core/labels.js';
 import { currentRole } from '../core/session.js';
 import { state } from '../core/state.js';
@@ -38,7 +39,7 @@ export async function renderMyLots() {
     target.innerHTML = lots.map(function (lot) {
         return '<article class="panel lot-row" data-lot-row="' + lot.id + '">' +
             '<div class="trade-summary"><div><h2>' + esc(lot.product?.name || 'Produto') + '</h2>' +
-            '<p>' + esc(lot.quantity) + ' ' + esc(lot.unit) + ' · ' + esc(lot.origin.city) + ', ' + esc(lot.origin.state) + ' · ' + money(lot.asking_price) + ' FRUSD' +
+            '<p>' + esc(quantityValue(lot.quantity)) + ' ' + esc(lot.unit) + ' · ' + esc(lot.origin.city) + ', ' + esc(lot.origin.state) + ' · ' + money(lot.asking_price) + ' FRUSD' +
             (lot.minimum_price ? ' (mínimo ' + money(lot.minimum_price) + ')' : '') + '</p></div>' +
             '<span class="status-pill">' + esc(surplusStatusLabels[lot.status] || lot.status) + '</span></div>' +
             '<div class="action-bar"><button class="button button-small button-ghost" type="button" data-offers="' + lot.id + '">Ver propostas</button>' +
@@ -142,12 +143,13 @@ export function paintLotEditor(lot) {
         '<form class="form-grid" data-edit-form>' +
         '<div class="field-row"><div class="field"><label>Quantidade (' + esc(lot.unit) + ')</label><input name="quantity" type="number" step="0.001" min="0.001" value="' + esc(lot.quantity) + '"></div>' +
         '<div class="field"><label>Disponível até</label><input name="available_until" type="datetime-local" value="' + esc(localDateTimeValue(new Date(lot.available_until))) + '"></div></div>' +
-        '<div class="field-row"><div class="field"><label>Preço pedido (FRUSD)</label><input name="asking_price" type="number" step="0.000001" min="0" value="' + esc(lot.asking_price) + '"></div>' +
-        '<div class="field"><label>Preço mínimo (privado)</label><input name="minimum_price" type="number" step="0.000001" min="0" value="' + esc(lot.minimum_price || '') + '"></div></div>' +
+            '<div class="field-row"><div class="field"><label>Preço total do lote (FRUSD)</label><input name="asking_price" data-usd-mask value="' + esc(formatUsd(lot.asking_price)) + '"></div>' +
+            '<div class="field"><label>Preço mínimo total (privado)</label><input name="minimum_price" data-usd-mask value="' + esc(lot.minimum_price ? formatUsd(lot.minimum_price) : '') + '"></div></div>' +
         '<label class="check-line"><input type="checkbox" name="donation_eligible"' + (lot.donation_eligible ? ' checked' : '') + '> Aceita doação</label>' +
         '<button class="button button-small" type="submit">Salvar alterações</button></form>',
     );
 
+    bindUsdMasks(panel);
     panel.querySelector('[data-edit-form]').addEventListener('submit', async function (event) {
         event.preventDefault();
         const form = event.currentTarget;
@@ -163,9 +165,10 @@ export function paintLotEditor(lot) {
          * que reenviaria o lote inteiro e ainda truncaria o prazo a cada edição.
          */
         if (numberChanged(fields.get('quantity'), lot.quantity)) payload.quantity = fields.get('quantity');
-        if (numberChanged(fields.get('asking_price'), lot.asking_price)) payload.asking_price = fields.get('asking_price');
+        const askingPrice = normalizeUsd(fields.get('asking_price'));
+        if (numberChanged(askingPrice, lot.asking_price)) payload.asking_price = askingPrice;
 
-        const minimum = fields.get('minimum_price');
+        const minimum = normalizeUsd(fields.get('minimum_price'));
         if (minimum === '' && lot.minimum_price !== null) {
             payload.minimum_price = null;
         } else if (minimum !== '' && numberChanged(minimum, lot.minimum_price)) {

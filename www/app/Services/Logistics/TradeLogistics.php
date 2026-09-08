@@ -251,9 +251,7 @@ class TradeLogistics
     private function reconcilePreparedTrade(int $tradeId, array $preparation): bool
     {
         $trade = Trade::find($tradeId);
-        $grace = (int) config('accounts.blockchain_reconciliation_grace_minutes');
         if (! $trade || $trade->status !== TradeStatus::WaitingPayment || ! $trade->payment_expires_at
-            || $trade->payment_expires_at->addMinutes($grace)->isFuture()
             || ! is_string($preparation['program_id'] ?? null)
             || $trade->blockchainAccount()->exists()) {
             return false;
@@ -284,10 +282,9 @@ class TradeLogistics
             return false;
         }
 
-        return (bool) DB::transaction(function () use ($tradeId, $preparation, $grace): bool {
+        return (bool) DB::transaction(function () use ($tradeId, $preparation): bool {
             $locked = Trade::whereKey($tradeId)->lockForUpdate()->first();
             if (! $locked || $locked->status !== TradeStatus::WaitingPayment || ! $locked->payment_expires_at
-                || $locked->payment_expires_at->addMinutes($grace)->isFuture()
                 || $locked->blockchainAccount()->exists()
                 || serialize($locked->blockchain_preparation) !== serialize($preparation)) {
                 return false;

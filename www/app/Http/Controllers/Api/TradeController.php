@@ -10,6 +10,7 @@ use App\Models\Offer;
 use App\Models\SurplusLot;
 use App\Models\Trade;
 use App\Models\User;
+use App\Services\Logistics\TradeLogistics;
 use App\Services\Marketplace\SurplusMarketplace;
 use App\UserRole;
 use Illuminate\Database\Eloquent\Builder;
@@ -27,9 +28,13 @@ class TradeController extends Controller
         'rescueProof',
     ];
 
-    public function index(ListTradesRequest $request): AnonymousResourceCollection
+    public function index(ListTradesRequest $request, TradeLogistics $logistics): AnonymousResourceCollection
     {
         Gate::authorize('viewAny', Trade::class);
+        // O scheduler mantém este estado atualizado normalmente, mas a tela de
+        // acompanhamento também precisa refletir o prazo quando o worker não
+        // está rodando (por exemplo, em ambiente local ou após uma pausa).
+        $logistics->expireUnfundedTrades();
         $data = $request->validated();
         $query = Trade::query()->with(self::RELATIONS);
 

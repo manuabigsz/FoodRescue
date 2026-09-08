@@ -62,7 +62,7 @@ A sessão usa e-mail e senha em `POST /auth/login`. O token Sanctum fica em `ses
 
 ## Integração
 
-Todas as telas consomem a API. A única exceção é o catálogo: quando a listagem falha — inclusive para visitante anônimo, já que `GET /surplus` exige autenticação —, ele exibe lotes de demonstração **com aviso visível**, e as ações de compra e doação ficam bloqueadas nesse modo.
+Todas as telas consomem a API. O catálogo consulta `GET /surplus` com os filtros de busca, finalidade, ordenação e paginação. Como esse endpoint exige autenticação, visitantes veem um convite para entrar; em caso de falha da API, a tela informa o problema e permite tentar novamente, sem exibir dados fictícios.
 
 A etapa `waiting_payment → funded` depende de assinatura de transação Solana, que não é feita no navegador. A tela de pagamento mostra os dados devolvidos por `POST /trades/{trade}/blockchain/prepare` e permite copiá-los; a assinatura e a confirmação são feitas pelos scripts em `../../solana/`.
 

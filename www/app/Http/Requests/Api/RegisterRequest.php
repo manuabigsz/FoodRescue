@@ -29,7 +29,7 @@ class RegisterRequest extends ApiRequest
             'wallet_challenge_id' => ['required', 'integer', 'min:1'],
             'wallet_signature' => ['required', new SolanaSignature],
             'password' => PasswordRules::rules(),
-            'password_confirmation' => ['required', 'string', 'max:72'],
+            'password_confirmation' => ['required', 'string', 'min:6', 'max:72'],
             'role' => ['required', Rule::in(UserRole::publicValues())],
             'profile' => ['required', 'array:'.implode(',', $commonProfileKeys)],
 

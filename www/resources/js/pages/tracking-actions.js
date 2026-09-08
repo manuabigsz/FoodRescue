@@ -1,5 +1,6 @@
 import { api } from '../core/api.js';
 import { esc, formatDateTime, money, short } from '../core/format.js';
+import { stateOptions } from '../core/form-fields.js';
 import { currentRole } from '../core/session.js';
 import {
     connectedWalletFor,
@@ -136,7 +137,7 @@ export function openActionPanel(trade, action, keepOpen) {
 export function destinationFields() {
     return '<div class="field"><label>Endereço de destino</label><input name="destination_address" maxlength="255" required></div>' +
         '<div class="field-row"><div class="field"><label>Cidade</label><input name="destination_city" maxlength="120" required></div>' +
-        '<div class="field"><label>Estado</label><input name="destination_state" maxlength="80" required></div></div>';
+        '<div class="field"><label>Estado</label><select name="destination_state" required>' + stateOptions() + '</select></div></div>';
 }
 
 export async function submitPanel(target, request) {
@@ -269,7 +270,7 @@ function summaryGrid(rows) {
  * agora do que depois de o usuário assinar.
  */
 export async function signaturePanel(target, options) {
-    const corpo = '<p>' + options.descricao + '</p>' + summaryGrid(options.resumo) + (options.extra || '');
+    const corpo = (options.descricaoHtml ? options.descricao : '<p>' + options.descricao + '</p>') + summaryGrid(options.resumo) + (options.extra || '');
 
     if (!walletAvailable()) {
         target.innerHTML = panelShell(options.titulo, corpo +
@@ -323,33 +324,27 @@ export async function paymentPanel(trade, target) {
     /** A custódia pode já existir se o pagamento parou entre as duas assinaturas. */
     const jaInicializado = onChainEscrow(trade);
     const papel = trade.is_donation ? 'instituição social' : 'comprador';
+    const frete = Number(trade.shipping_amount || 0) > 0 ? money(trade.shipping_amount) + ' FRUSD' : 'Sem frete';
+    const descricaoPagamento = jaInicializado
+        ? '<div class="payment-intro"><strong>Seu pagamento está quase concluído.</strong><p>A reserva já está protegida. Falta apenas confirmar a transferência do valor para liberar o próximo passo da operação.</p></div>'
+        : '<div class="payment-intro"><strong>Seu pagamento ficará protegido até a entrega.</strong><p>O valor será reservado em custódia e só será distribuído quando a operação cumprir as etapas combinadas.</p></div>' +
+            '<div class="payment-steps"><span><b>1</b> Criar a proteção</span><span><b>2</b> Confirmar o pagamento</span></div>';
 
     await signaturePanel(target, {
         titulo: 'Pagamento em custódia',
-        descricao: 'O backend prepara a instrução e confere o resultado, mas <strong>não assina</strong>: quem assina é a sua carteira. ' +
-            (jaInicializado
-                ? 'A custódia já existe on-chain; falta transferir o valor para o cofre.'
-                : 'São duas assinaturas — a primeira cria a custódia on-chain, a segunda transfere o valor para o cofre.'),
+        descricao: descricaoPagamento + '<p class="footer-note">A confirmação será aberta na sua carteira. Você não precisa compartilhar senha ou chave privada.</p>',
+        descricaoHtml: true,
         preparation: preparation,
         instruction: jaInicializado ? preparation.fund_instruction : preparation.initialize_instruction,
         wallet: preparation.wallets?.buyer,
         papel: papel,
         botao: jaInicializado ? 'Assinar o pagamento' : 'Assinar e pagar',
         resumo: [
-            ['Programa', preparation.program_id],
-            ['Mint FRUSD', preparation.mint],
-            ['Carteira pagadora', preparation.wallets?.buyer],
-            ['Produtor', preparation.wallets?.producer],
-            ['Transportadora', preparation.wallets?.carrier],
+            ['Total a pagar', money(trade.buyer_total) + ' FRUSD'],
+            ['Valor do alimento', money(trade.product_amount) + ' FRUSD'],
+            ['Frete', frete],
+            ['Pagamento até', formatDateTime(trade.payment_expires_at)],
         ],
-        extra: '<button class="button button-ghost button-small" type="button" data-copy-preparation>Copiar dados da instrução</button>',
-        onRender: function (node) {
-            node.querySelector('[data-copy-preparation]').addEventListener('click', function () {
-                navigator.clipboard?.writeText(JSON.stringify(preparation, null, 2))
-                    .then(function () { toast('Dados da instrução copiados.'); })
-                    .catch(function () { toast('Não foi possível copiar.', 'error'); });
-            });
-        },
         run: async function (progress, carteira) {
             if (!jaInicializado) {
                 progress('1 de 2 — confirme a criação da custódia na carteira…');

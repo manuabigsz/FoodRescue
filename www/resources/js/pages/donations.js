@@ -7,9 +7,10 @@ import { howCard, setPage, solscanAddress } from '../core/ui.js';
 
 export async function renderDonations() {
     setPage(
-        '<div class="page"><div class="shell"><section class="donation-hero"><div class="donation-copy"><span class="eyebrow eyebrow-light">IMPACTO COMPROVADO</span><h1>Resgatar é dar destino — e deixar prova.</h1><p>ONGs aceitam lotes elegíveis, coordenam o transporte e registram a destinação dos alimentos. O Proof of Rescue torna cada entrega verificável.</p><div><a class="button button-secondary" href="#/catalogo">Ver lotes para doação →</a></div></div>' +
-        '<div data-proof><div class="skeleton" style="min-height:280px"></div></div></section>' +
-        '<section class="section"><div class="section-head"><div><span class="eyebrow">FLUXO DE DOAÇÃO</span><h2>Da oferta ao Proof of Rescue.</h2></div><p>O estado <strong>proof_pending</strong> garante que uma doação entregue só seja concluída após a comprovação pela organização beneficiária.</p></div>' +
+        '<div class="page"><div class="shell"><section class="donation-hero"><div class="donation-copy"><span class="eyebrow eyebrow-light">IMPACTO COMPROVADO</span><h1>Resgatar é dar destino <em>— e deixar prova.</em></h1><p>Conectamos excedentes agrícolas a organizações sociais e registramos cada entrega para que o impacto possa ser acompanhado, validado e lembrado.</p><div class="donation-actions"><a class="button button-secondary" href="#/catalogo">Ver lotes para doação <span aria-hidden="true">→</span></a><a class="button button-ghost" href="#donation-flow">Entender o fluxo <span aria-hidden="true">↓</span></a></div><div class="donation-assurance"><span class="assurance-icon" aria-hidden="true">✓</span><span><strong>Transparência em cada etapa</strong><small>Da oferta ao registro na Solana.</small></span></div></div>' +
+        '<div data-proof><div class="skeleton donation-skeleton" aria-label="Carregando prova de impacto"></div></div></section>' +
+        '<section class="donation-highlights" aria-label="Princípios do programa"><article><span class="highlight-icon" aria-hidden="true">↗</span><div><strong>Alimento aproveitado</strong><p>Excedentes ganham um destino social antes de virar desperdício.</p></div></article><article><span class="highlight-icon" aria-hidden="true">◎</span><div><strong>Rede coordenada</strong><p>Produtores, ONGs e transportadoras trabalham em um só fluxo.</p></div></article><article><span class="highlight-icon" aria-hidden="true">⌁</span><div><strong>Prova verificável</strong><p>O resgate confirmado fica registrado de forma pública e auditável.</p></div></article></section>' +
+        '<section class="section donation-flow" id="donation-flow"><div class="section-head"><div><span class="eyebrow">FLUXO DE DOAÇÃO</span><h2>Da oferta ao Proof of Rescue.</h2></div><p>O estado <strong>proof_pending</strong> garante que uma doação entregue só seja concluída após a comprovação pela organização beneficiária.</p></div>' +
         '<div class="how-grid">' + howCard('01', 'Lote elegível', 'O produtor marca o excedente como disponível para doação.') + howCard('02', 'ONG aceita', 'A organização assume o recebimento e define a logística.') + howCard('03', 'Entrega', 'A carga percorre os estados funded, in_transit e delivered.') + howCard('04', 'Proof', 'A ONG confirma o resgate e a operação passa a completed.') + '</div></section></div></div>',
         'Doações e Proof of Rescue',
     );
@@ -21,7 +22,7 @@ export async function paintProofCard() {
     if (!target) return;
 
     if (!state.token) {
-        target.innerHTML = '<article class="proof-card"><div class="proof-seal">✓</div><small>PROOF OF RESCUE</small><h2>Prova on-chain de destinação</h2>' +
+        target.innerHTML = '<article class="proof-card"><div class="proof-card-heading"><div class="proof-seal">✓</div><span class="proof-status">Programa ativo</span></div><small>PROOF OF RESCUE</small><h2>Prova on-chain de destinação</h2>' +
             '<p>Cada doação entregue gera um registro assinado pelo produtor e pela organização beneficiária, gravado no programa FoodRescue.</p>' +
             '<p class="footer-note">Entre na sua conta para ver as provas das suas doações.</p>' +
             '<a class="button button-ghost button-small" href="' + solscanAddress(config.programId) + '" target="_blank" rel="noopener">Ver o programa no Solscan ↗</a></article>';
@@ -39,7 +40,7 @@ export async function paintProofCard() {
     const proven = donations.find(function (trade) { return trade.rescue_proof?.confirmed_at; });
     if (!proven) {
         const pending = donations[0];
-        target.innerHTML = '<article class="proof-card"><div class="proof-seal">◷</div><small>PROOF OF RESCUE</small>' +
+        target.innerHTML = '<article class="proof-card"><div class="proof-card-heading"><div class="proof-seal proof-seal-pending">◷</div><span class="proof-status pending">Em acompanhamento</span></div><small>PROOF OF RESCUE</small>' +
             '<h2>' + (pending ? 'Doação #' + pending.id + ' em andamento' : 'Nenhuma doação registrada') + '</h2>' +
             '<p>' + (pending
                 ? 'Estado atual: ' + esc(statusLabels[pending.status] || pending.status) + '. A prova é emitida quando a entrega for confirmada e comprovada.'
@@ -51,7 +52,7 @@ export async function paintProofCard() {
     }
 
     const proof = proven.rescue_proof;
-    target.innerHTML = '<article class="proof-card"><div class="proof-seal">✓</div><small>PROOF OF RESCUE</small><h2>Resgate #' + proven.id + '</h2>' +
+    target.innerHTML = '<article class="proof-card"><div class="proof-card-heading"><div class="proof-seal">✓</div><span class="proof-status">Confirmado</span></div><small>PROOF OF RESCUE</small><h2>Resgate #' + proven.id + '</h2>' +
         '<p>Entrega social confirmada e registrada na Solana ' + esc(config.network) + '.</p><dl>' +
         '<div><dt>Alimento resgatado</dt><dd>' + esc((proven.surplus_lot?.quantity || '—') + ' ' + (proven.surplus_lot?.unit || '')) + '</dd></div>' +
         '<div><dt>Lote</dt><dd>' + esc(proven.surplus_lot?.product?.name || '—') + '</dd></div>' +

@@ -138,7 +138,7 @@ describe('roteamento', () => {
         ['#/catalogo', 'Excedentes disponíveis'],
         ['#/acompanhamento', 'Acompanhe cada etapa'],
         ['#/doacoes', 'Resgatar é dar destino'],
-        ['#/rede', 'Infraestrutura Solana'],
+        ['#/rede', 'Confiança que pode ser conferida'],
         ['#/publicar', 'Publicar excedente'],
         ['#/meus-lotes', 'Meus lotes'],
         ['#/perfil', 'Perfil'],

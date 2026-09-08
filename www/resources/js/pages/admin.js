@@ -1,6 +1,8 @@
 import { api } from '../core/api.js';
+import { config } from '../core/config.js';
 import { esc, money, quantityLabel } from '../core/format.js';
 import { roleLabels, settingLabels, userStatusLabels } from '../core/labels.js';
+import { connectedWallet, protocolConfigAddress, signAndSend, walletAvailable, walletErrorMessage } from '../core/solana.js';
 import { state } from '../core/state.js';
 import { detailCell, setPage, toast } from '../core/ui.js';
 import { paintStatusList } from './dashboard.js';
@@ -10,6 +12,7 @@ export const adminTabs = [
     ['usuarios', 'Usuários'],
     ['catalogo', 'Catálogo'],
     ['ajustes', 'Prazos'],
+    ['solana', 'Solana'],
 ];
 
 export async function renderAdmin() {
@@ -31,12 +34,74 @@ export async function renderAdmin() {
         return;
     }
 
-    const painters = { visao: paintAdminOverview, usuarios: paintAdminUsers, catalogo: paintAdminCatalog, ajustes: paintAdminSettings };
+    const painters = { visao: paintAdminOverview, usuarios: paintAdminUsers, catalogo: paintAdminCatalog, ajustes: paintAdminSettings, solana: paintAdminSolana };
     try {
         await (painters[tab] || paintAdminOverview)(target);
     } catch (error) {
         target.innerHTML = '<div class="empty-state"><h2>Não foi possível carregar</h2><p>' + esc(error.message) + '</p></div>';
     }
+}
+
+export async function paintAdminSolana(target) {
+    let protocol = null;
+    try {
+        protocol = await api('/blockchain/protocol');
+    } catch (_) {
+        protocol = null;
+    }
+
+    if (protocol) {
+        target.innerHTML = '<article class="panel"><span class="eyebrow">PROTOCOLO</span><h2>ProtocolConfig inicializado</h2>' +
+            '<p>A configuração oficial já foi confirmada na Solana e será reutilizada pelos pagamentos e liquidações.</p>' +
+            '<div class="details-grid">' +
+            detailCell('Rede', protocol.cluster) +
+            detailCell('Program ID', protocol.program_id) +
+            detailCell('Mint FRUSD', protocol.mint) +
+            detailCell('ProtocolConfig PDA', protocol.config_pda) +
+            detailCell('Treasury', protocol.treasury_wallet) +
+            detailCell('Confirmado em', protocol.confirmed_at || '—') +
+            '</div></article>';
+
+        return;
+    }
+
+    target.innerHTML = '<article class="panel"><span class="eyebrow">PROTOCOLO</span><h2>Inicializar configuração Solana</h2>' +
+        '<p>Este passo é executado uma única vez por ambiente. A carteira authority cria o ProtocolConfig na Devnet e paga apenas a taxa da transação.</p>' +
+        '<p class="footer-note">Conecte a carteira authority configurada no servidor. O administrador da aplicação e a authority podem ser carteiras diferentes.</p>' +
+        '<button class="button button-small" type="button" data-protocol-start>Conectar authority e inicializar</button>' +
+        '<p class="form-message" data-protocol-message></p></article>';
+
+    target.querySelector('[data-protocol-start]').addEventListener('click', async function (event) {
+        const button = event.currentTarget;
+        const message = target.querySelector('[data-protocol-message]');
+        button.disabled = true;
+        message.textContent = 'Conectando a carteira authority…';
+        try {
+            if (!walletAvailable()) throw new Error('Nenhuma carteira Solana compatível foi encontrada no navegador.');
+            const wallet = await connectedWallet();
+            const configPda = await protocolConfigAddress(config.programId, wallet);
+            message.textContent = 'Preparando a instrução…';
+            const preparation = await api('/admin/blockchain/protocol/prepare', {
+                method: 'POST',
+                body: JSON.stringify({ config_pda: configPda }),
+            });
+            if (preparation.authority_wallet !== wallet) {
+                throw new Error('A carteira conectada não é a authority configurada no servidor.');
+            }
+            message.textContent = 'Confirme a inicialização na carteira…';
+            const signature = await signAndSend(preparation, preparation.initialize_instruction, wallet);
+            message.textContent = 'Confirmando a transação no Laravel…';
+            await api('/admin/blockchain/protocol/confirm', {
+                method: 'POST',
+                body: JSON.stringify({ signature: signature, config_pda: configPda }),
+            });
+            toast('ProtocolConfig inicializado e confirmado.');
+            renderAdmin();
+        } catch (error) {
+            message.textContent = walletErrorMessage(error);
+            button.disabled = false;
+        }
+    });
 }
 
 export async function paintAdminOverview(target) {

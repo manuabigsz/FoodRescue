@@ -20,7 +20,7 @@ class CreateAdminRequest extends ApiRequest
             'name' => ['required', 'string', 'max:120'],
             'email' => ['required', 'string', 'email:rfc', 'max:254', Rule::unique('users', 'email')],
             'password' => PasswordRules::rules(),
-            'password_confirmation' => ['required', 'string', 'max:72'],
+            'password_confirmation' => ['required', 'string', 'min:6', 'max:72'],
             'current_password' => ['required', 'string', 'max:72'],
         ];
     }

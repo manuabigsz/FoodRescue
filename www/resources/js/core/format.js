@@ -13,12 +13,16 @@ export function money(value) {
     return new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(value || 0));
 }
 
+export function quantityValue(value) {
+    return new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 3 }).format(Number(value || 0));
+}
+
 export function quantityLabel(quantities) {
     const entries = Object.entries(quantities || {});
     if (!entries.length) return '—';
 
     return entries.map(function (entry) {
-        return new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 3 }).format(Number(entry[1])) + ' ' + entry[0];
+        return quantityValue(entry[1]) + ' ' + entry[0];
     }).join(' · ');
 }
 

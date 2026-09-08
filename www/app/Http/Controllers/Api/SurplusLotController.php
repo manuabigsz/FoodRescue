@@ -10,6 +10,7 @@ use App\Http\Requests\Api\Surplus\UpdateSurplusRequest;
 use App\Http\Resources\SurplusLotResource;
 use App\Models\SurplusLot;
 use App\Services\Marketplace\SurplusMarketplace;
+use App\Services\WalletVerificationService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -86,11 +87,19 @@ class SurplusLotController extends Controller
         return new SurplusLotResource($surplusLot->load(['producer.roles', 'agriculturalProduct', 'qualityGrade']));
     }
 
-    public function store(StoreSurplusRequest $request, SurplusMarketplace $marketplace): JsonResponse
+    public function store(StoreSurplusRequest $request, SurplusMarketplace $marketplace, WalletVerificationService $wallets): JsonResponse
     {
         Gate::authorize('create', SurplusLot::class);
 
-        return (new SurplusLotResource($marketplace->createLot($request->user(), $request->validated())))
+        $wallets->consumeSurplusPublicationChallenge(
+            $request->user(),
+            (int) $request->validated('wallet_challenge_id'),
+            $request->validated('wallet_signature'),
+        );
+
+        $data = $request->safe()->except(['wallet_challenge_id', 'wallet_signature']);
+
+        return (new SurplusLotResource($marketplace->createLot($request->user(), $data)))
             ->response()->setStatusCode(201);
     }
 

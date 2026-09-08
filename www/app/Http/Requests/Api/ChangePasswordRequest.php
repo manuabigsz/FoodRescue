@@ -12,7 +12,7 @@ class ChangePasswordRequest extends ApiRequest
         return [
             'current_password' => ['required', 'string', 'max:72'],
             'password' => [...PasswordRules::rules(), 'different:current_password'],
-            'password_confirmation' => ['required', 'string', 'max:72'],
+            'password_confirmation' => ['required', 'string', 'min:6', 'max:72'],
         ];
     }
 }

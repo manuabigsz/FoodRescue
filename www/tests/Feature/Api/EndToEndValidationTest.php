@@ -23,6 +23,8 @@ class EndToEndValidationTest extends TestCase
 
     private array $prepared = [];
 
+    private array $publicationKeys = [];
+
     private array $proof = [];
 
     /** Status do Proof of Rescue on-chain: 0 antes do produtor, 1 depois. */
@@ -63,12 +65,21 @@ class EndToEndValidationTest extends TestCase
         ]);
         $this->fakeChain();
         $product = AgriculturalProduct::factory()->create();
-        $lotId = $this->asActor($producer)->postJson('/api/v1/surplus', [
+        $lotPayload = [
             'agricultural_product_id' => $product->id, 'quantity' => '20.125', 'unit' => 'box',
             'origin_address' => 'Farm', 'origin_city' => 'Campinas', 'origin_state' => 'SP', 'origin_country' => 'BR',
             'harvest_date' => now()->toDateString(), 'available_until' => now()->addDay()->toISOString(),
             'asking_price' => '100.123456', 'minimum_price' => '90', 'donation_eligible' => $donation,
             'accepted_logistics_modes' => ['buyer_pickup', 'third_party_carrier'],
+        ];
+        $challenge = $this->asActor($producer)->postEmptyJson('/api/v1/auth/wallet/surplus-publication-challenge')
+            ->assertCreated()->json('data');
+        $lotId = $this->asActor($producer)->postJson('/api/v1/surplus', $lotPayload + [
+            'wallet_challenge_id' => $challenge['id'],
+            'wallet_signature' => base64_encode(sodium_crypto_sign_detached(
+                $challenge['message'],
+                sodium_crypto_sign_secretkey($this->publicationKeys[$producer->id]),
+            )),
         ])->assertCreated()->json('data.id');
         $this->asActor($recipient)->getJson('/api/v1/surplus/'.$lotId)->assertOk()->assertJsonMissingPath('data.minimum_price');
         $id = $this->postEmptyJson('/api/v1/surplus/'.$lotId.($donation ? '/donations/accept' : '/buy-now'))
@@ -190,6 +201,7 @@ class EndToEndValidationTest extends TestCase
             'wallet_challenge_id' => $challenge['id'],
             'wallet_signature' => base64_encode(sodium_crypto_sign_detached($challenge['message'], sodium_crypto_sign_secretkey($key))),
         ])->assertCreated()->assertJsonPath('data.solana_wallet_verified', true)->json('data.id');
+        $this->publicationKeys[$id] = $key;
         $this->tokens[$id] = $this->postJson('/api/v1/auth/login', ['email' => $email, 'password' => $password])->assertOk()->json('data.token');
 
         return User::findOrFail($id);

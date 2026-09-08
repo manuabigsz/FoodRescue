@@ -213,6 +213,30 @@ describe('administração', () => {
             payment_timeout_minutes: 15,
         });
     });
+
+    it('mostra o ProtocolConfig já confirmado na aba Solana', async () => {
+        await bootApp({
+            hash: '#/admin?tab=solana',
+            session: { user: adminUser },
+            routes: {
+                'GET /auth/me': { data: adminUser },
+                'GET /blockchain/protocol': {
+                    data: {
+                        cluster: 'devnet',
+                        program_id: '7VYeepULRV6SpzugLquhizUf3iNH3jtLqEJ5RqQqPboi',
+                        mint: '9tVPExJFkBU3yLgyo8fVzFVQj2t2boEESSpmoYikfxRr',
+                        treasury_wallet: 'G7QtKUSLYiYcdtzUAUdyyxg7jjuGoTrqePspnmE49mbv',
+                        config_pda: '5wbZZiSzAbn7g8obEUJCQrdZTC7y6UrKuazvY7CVcu7T',
+                        confirmed_at: '2026-09-08T10:00:00.000000Z',
+                    },
+                },
+            },
+        });
+
+        expect(document.body.textContent).toContain('ProtocolConfig inicializado');
+        expect(document.body.textContent).toContain('7VYeepULRV6SpzugLquhizUf3iNH3jtLqEJ5RqQqPboi');
+        expect(document.querySelector('[data-protocol-start]')).toBeNull();
+    });
 });
 
 describe('telas públicas', () => {
@@ -267,8 +291,8 @@ describe('telas públicas', () => {
         });
 
         expect(document.querySelectorAll('.chain-card')).toHaveLength(4);
-        expect(document.body.textContent).toContain('ProtocolConfig PDA');
-        expect(document.body.textContent).toContain('versão 1');
+        expect(document.body.textContent).toContain('Parâmetros de confiança');
+        expect(document.body.textContent).toContain('Última verificação pública');
     });
 
     it('rede explica quando o protocolo ainda não foi inicializado', async () => {
@@ -279,6 +303,6 @@ describe('telas públicas', () => {
         });
 
         expect(document.querySelectorAll('.chain-card')).toHaveLength(2);
-        expect(document.body.textContent).toContain('ainda não foi inicializado');
+        expect(document.body.textContent).toContain('A configuração pública ainda está sendo preparada');
     });
 });

@@ -15,6 +15,8 @@ Route::post('login', [AuthController::class, 'login'])
 Route::middleware(['auth:sanctum', 'active', 'throttle:api'])->group(function (): void {
     Route::post('wallet/change/challenge', [WalletController::class, 'challenge'])
         ->middleware('throttle:sensitive')->name('wallet.challenge');
+    Route::post('wallet/surplus-publication-challenge', [WalletController::class, 'surplusPublicationChallenge'])
+        ->middleware('throttle:sensitive')->name('wallet.surplus_publication_challenge');
     Route::post('wallet/change/verify', [WalletController::class, 'verify'])
         ->middleware('throttle:sensitive')->name('wallet.verify');
     Route::get('me', [ProfileController::class, 'show'])->name('me');

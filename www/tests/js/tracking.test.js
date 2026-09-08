@@ -171,6 +171,7 @@ describe('acompanhamento de operações', () => {
         });
 
         expect(document.querySelector('.trade-summary h2').textContent).toContain('#11');
+        expect(document.querySelector('.trade-summary h2').textContent).toContain('Tomate italiano');
         expect(document.querySelector('.trade-picker .active').textContent).toContain('#11');
     });
 

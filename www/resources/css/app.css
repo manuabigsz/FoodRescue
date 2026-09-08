@@ -179,15 +179,35 @@ main { min-height: 60vh; }
 .detail small { display: block; color: var(--muted); }
 .detail strong { color: var(--forest); word-break: break-word; }
 
-.donation-hero { display: grid; grid-template-columns: 1fr 1fr; min-height: 430px; border-radius: 28px; overflow: hidden; background: var(--forest); color: #fff; }
-.donation-copy { padding: clamp(2rem, 5vw, 4.5rem); display: flex; flex-direction: column; justify-content: center; }
-.donation-copy h1 { margin: 0; font-size: clamp(2.5rem, 5vw, 4.6rem); line-height: .98; letter-spacing: -.06em; }
+.donation-hero { position: relative; display: grid; grid-template-columns: 1fr 1fr; min-height: 510px; border-radius: 28px; overflow: hidden; background: radial-gradient(circle at 100% 0%, #28664b 0, transparent 38%), var(--forest); color: #fff; box-shadow: 0 24px 70px rgba(18,60,45,.18); }
+.donation-hero::before { content: ''; position: absolute; inset: 0 50% 0 0; opacity: .08; background: repeating-linear-gradient(135deg, transparent 0 18px, #d9f4b4 19px 20px); pointer-events: none; }
+.donation-copy { position: relative; z-index: 1; padding: clamp(2rem, 5vw, 4.5rem); display: flex; flex-direction: column; justify-content: center; }
+.donation-copy h1 { max-width: 590px; margin: 0; font-size: clamp(2.5rem, 5vw, 4.6rem); line-height: .98; letter-spacing: -.06em; }
+.donation-copy h1 em { display: block; color: var(--lime); font-family: Georgia, serif; font-weight: 400; }
 .donation-copy p { color: #c8d8cf; }
-.proof-card { margin: 1.4rem; padding: clamp(1.5rem, 3vw, 2.3rem); align-self: center; border: 1px solid rgba(255,255,255,.2); border-radius: 20px; background: rgba(255,255,255,.08); }
+.donation-actions { display: flex; gap: .7rem; flex-wrap: wrap; margin-top: .8rem; }
+.donation-hero .button-ghost { color: #fff; border-color: rgba(255,255,255,.35); background: rgba(255,255,255,.06); }
+.donation-hero .button-ghost:hover { color: var(--forest); background: #fff; }
+.donation-assurance { display: flex; align-items: center; gap: .7rem; margin-top: 2rem; color: #d8e7dd; font-size: .84rem; }
+.donation-assurance strong, .donation-assurance small { display: block; }
+.donation-assurance small { color: #a9c2b4; }
+.assurance-icon { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 50%; color: var(--forest); background: var(--lime); font-weight: 900; }
+.donation-skeleton { min-height: 330px; margin: 1.4rem; border: 1px solid rgba(255,255,255,.15); background: linear-gradient(100deg,rgba(255,255,255,.06) 20%,rgba(255,255,255,.14) 40%,rgba(255,255,255,.06) 60%); background-size: 200% 100%; }
+.proof-card { margin: 1.4rem; padding: clamp(1.5rem, 3vw, 2.3rem); align-self: center; border: 1px solid rgba(255,255,255,.22); border-radius: 20px; background: rgba(255,255,255,.09); box-shadow: 0 20px 45px rgba(0,0,0,.12); backdrop-filter: blur(12px); }
+.proof-card-heading { display: flex; align-items: start; justify-content: space-between; gap: 1rem; }
 .proof-seal { width: 70px; height: 70px; display: grid; place-items: center; margin-bottom: 1.5rem; border: 1px solid rgba(255,255,255,.25); border-radius: 50%; color: var(--forest); background: var(--lime); font-size: 1.8rem; }
+.proof-seal-pending { color: #624a12; background: #f4cf72; }
+.proof-status { padding: .35rem .55rem; border: 1px solid rgba(201,239,119,.35); border-radius: 999px; color: var(--lime); background: rgba(201,239,119,.1); font-size: .7rem; font-weight: 800; white-space: nowrap; }
+.proof-status.pending { color: #f4cf72; border-color: rgba(244,207,114,.35); background: rgba(244,207,114,.1); }
 .proof-card dl { display: grid; grid-template-columns: 1fr 1fr; gap: .8rem; }
 .proof-card dt { color: #b6c9be; font-size: .76rem; }
 .proof-card dd { margin: .15rem 0 0; font-weight: 700; }
+.donation-highlights { display: grid; grid-template-columns: repeat(3, 1fr); gap: .8rem; margin: 1rem 0 0; }
+.donation-highlights article { display: flex; align-items: start; gap: .8rem; padding: 1.15rem; border: 1px solid var(--line); border-radius: 16px; background: #fff; }
+.highlight-icon { width: 34px; height: 34px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 10px; color: var(--forest); background: #eaf3df; font-size: 1.15rem; font-weight: 800; }
+.donation-highlights strong { display: block; color: var(--forest); font-size: .92rem; }
+.donation-highlights p { margin: .2rem 0 0; color: var(--muted); font-size: .8rem; line-height: 1.4; }
+.donation-flow { padding-bottom: 2rem; }
 
 .chain-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
 .chain-card { padding: 1.5rem; border: 1px solid var(--line); border-radius: var(--radius); background: #fff; }
@@ -195,6 +215,17 @@ main { min-height: 60vh; }
 .chain-card h2 { margin: 0 0 .8rem; }
 .chain-card p { color: var(--muted); }
 .chain-card.featured p { color: #bed0c6; }
+.network-page-head { margin-bottom: 1.4rem; }
+.network-page-head h1 { max-width: 650px; }
+.network-page-head p { max-width: 650px; font-size: 1.02rem; }
+.network-intro { display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; padding: 1rem 1.15rem; border: 1px solid #d5e2d4; border-radius: 16px; background: linear-gradient(100deg, #eef6e8, #fff); }
+.network-intro-icon { width: 42px; height: 42px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 13px; color: var(--forest); background: var(--lime); font-size: 1.45rem; }
+.network-intro strong { color: var(--forest); }
+.network-intro p { margin: .15rem 0 0; color: var(--muted); font-size: .86rem; }
+.network-flow { padding-top: 4.5rem; }
+.network-flow .how-card { min-height: 225px; }
+.network-footnote { display: flex; align-items: center; gap: .35rem; flex-wrap: wrap; }
+.network-footnote a { color: var(--forest); font-weight: 800; }
 .address { display: flex; align-items: center; justify-content: space-between; gap: .8rem; margin-top: 1rem; padding: .8rem; border-radius: 11px; background: #f2f5f1; font-family: ui-monospace, monospace; font-size: .82rem; word-break: break-all; }
 .featured .address { background: rgba(255,255,255,.09); }
 .address a { color: #67993e; font-family: 'Instrument Sans', sans-serif; font-weight: 800; white-space: nowrap; }
@@ -236,6 +267,7 @@ main { min-height: 60vh; }
 .pagination { display: flex; align-items: center; justify-content: center; gap: .9rem; margin-top: 1.6rem; color: var(--muted); font-size: .86rem; font-weight: 700; }
 .pagination:empty { display: none; }
 .demo-banner { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin: 0 0 1.2rem; padding: .85rem 1rem; border: 1px solid #e2c98f; border-radius: 13px; color: #7a5a12; background: #fdf6e4; font-size: .87rem; font-weight: 600; }
+.catalog-alert { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin: 0 0 1.2rem; padding: .9rem 1rem; border: 1px solid #d5e2d4; border-radius: 13px; color: var(--forest); background: #f2f8ee; font-size: .87rem; font-weight: 600; }
 .mobile-nav-action { padding: .9rem; text-align: left; border: 0; border-bottom: 1px solid #edf0eb; background: none; color: var(--forest); font-weight: 700; }
 
 .check-line { display: flex; align-items: center; gap: .55rem; padding: .3rem 0; color: var(--ink); font-size: .88rem; font-weight: 600; }
@@ -247,6 +279,12 @@ fieldset.field legend { padding: 0 .35rem; color: #4a5952; font-size: .79rem; fo
 .action-bar .footer-note { margin: 0 0 0 auto; }
 .action-panel { margin-top: 1rem; }
 .action-panel h3 { margin-top: 0; }
+.payment-intro { display: grid; gap: .35rem; margin-bottom: 1rem; padding: 1rem; border-radius: 14px; background: linear-gradient(135deg, #f2f8f2, #f8fbf7); border: 1px solid #dce9dd; }
+.payment-intro strong { color: var(--forest); font-size: 1.05rem; }
+.payment-intro p { margin: 0; color: var(--muted); }
+.payment-steps { display: grid; grid-template-columns: repeat(2, 1fr); gap: .65rem; margin-bottom: 1rem; }
+.payment-steps span { display: flex; align-items: center; gap: .5rem; padding: .7rem; border: 1px solid var(--line); border-radius: 10px; color: var(--muted); font-size: .84rem; }
+.payment-steps b { display: grid; place-items: center; width: 1.5rem; height: 1.5rem; border-radius: 50%; background: var(--forest); color: #fff; font-size: .75rem; }
 .quote-list { display: grid; gap: .55rem; margin-top: .8rem; }
 .quote-row { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: .9rem; padding: .7rem .85rem; border: 1px solid var(--line); border-radius: 13px; background: #fff; }
 .quote-row small { display: block; color: var(--muted); font-size: .78rem; }
@@ -261,6 +299,7 @@ fieldset.field legend { padding: 0 .35rem; color: #4a5952; font-size: .79rem; fo
 .code-block { margin: .5rem 0; padding: .7rem .85rem; border-radius: 10px; background: #12261e; color: #cfe6d8; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .82rem; overflow-x: auto; }
 
 .field-hint-label { color: #4a5952; font-size: .79rem; font-weight: 700; }
+.field-note { display: block; margin-top: .35rem; color: var(--muted); font-size: .76rem; line-height: 1.35; }
 .transit-hint { display: flex; align-items: center; min-height: 46px; padding: .72rem .8rem; border: 1px dashed #cfd9d1; border-radius: 11px; color: var(--forest); background: #f6f9f4; font-size: .86rem; font-weight: 700; }
 .transit-hint.invalid { border-color: #d99a8f; color: #8c3a2c; background: #fdf1ef; }
 
@@ -304,7 +343,13 @@ fieldset.field legend { padding: 0 .35rem; color: #4a5952; font-size: .79rem; fo
     .timeline-step::before { top: 0; bottom: 0; left: .4rem; right: auto; width: 3px; height: auto; }
     .timeline-step::after { top: .1rem; left: 0; }
     .donation-hero { grid-template-columns: 1fr; }
+    .donation-copy { padding: 2.5rem 1.5rem 2rem; }
+    .donation-copy h1 { font-size: clamp(2.6rem, 13vw, 4.2rem); }
+    .donation-highlights { grid-template-columns: 1fr; }
     .proof-card dl { grid-template-columns: 1fr; }
+    .donation-skeleton { min-height: 260px; margin: 0 1rem 1rem; }
+    .network-intro { align-items: start; }
+    .network-page-head p { font-size: .95rem; }
     .auth-modal { grid-template-columns: 1fr; }
     .auth-visual { min-height: 260px; padding: 1.5rem; }
     .auth-visual h2 { font-size: 2rem; max-width: 80%; }

@@ -1,19 +1,10 @@
 import { openAuth, openAuthOrDashboard } from '../auth/modal.js';
 import { api } from '../core/api.js';
-import { deadlineLabel, esc, money } from '../core/format.js';
+import { deadlineLabel, esc, money, quantityValue } from '../core/format.js';
 import { currentRole } from '../core/session.js';
 import { state } from '../core/state.js';
 import { selectOptions, setPage, toast } from '../core/ui.js';
 import { selectedTradeId } from './tracking.js';
-
-export const sampleLots = [
-    { id: 1042, product: { name: 'Tomate italiano' }, quality_grade: { name: 'Tipo B' }, quantity: '680', unit: 'kg', origin: { city: 'Mogi das Cruzes', state: 'SP' }, asking_price: '2.35', available_until: new Date(Date.now() + 86400000).toISOString(), donation_eligible: true, theme: 'tomato' },
-    { id: 1041, product: { name: 'Banana-prata' }, quality_grade: { name: 'Tipo A' }, quantity: '1.2', unit: 't', origin: { city: 'Registro', state: 'SP' }, asking_price: '1.80', available_until: new Date(Date.now() + 172800000).toISOString(), donation_eligible: false, theme: '' },
-    { id: 1039, product: { name: 'Couve manteiga' }, quality_grade: { name: 'Tipo B' }, quantity: '240', unit: 'kg', origin: { city: 'Ibiúna', state: 'SP' }, asking_price: '1.15', available_until: new Date(Date.now() + 21600000).toISOString(), donation_eligible: true, theme: 'green' },
-    { id: 1037, product: { name: 'Batata-doce' }, quality_grade: { name: 'Tipo A' }, quantity: '830', unit: 'kg', origin: { city: 'Piedade', state: 'SP' }, asking_price: '1.65', available_until: new Date(Date.now() + 259200000).toISOString(), donation_eligible: true, theme: 'purple' },
-    { id: 1035, product: { name: 'Cenoura' }, quality_grade: { name: 'Tipo B' }, quantity: '420', unit: 'kg', origin: { city: 'São Gotardo', state: 'MG' }, asking_price: '1.32', available_until: new Date(Date.now() + 129600000).toISOString(), donation_eligible: false, theme: '' },
-    { id: 1032, product: { name: 'Abobrinha' }, quality_grade: { name: 'Tipo A' }, quantity: '315', unit: 'kg', origin: { city: 'Atibaia', state: 'SP' }, asking_price: '1.48', available_until: new Date(Date.now() + 64800000).toISOString(), donation_eligible: false, theme: 'green' },
-];
 
 export async function renderCatalog() {
     /** A ONG só pode aceitar lotes elegíveis; o filtro já entra ligado até ela mexer. */
@@ -34,19 +25,16 @@ export async function renderCatalog() {
     await loadCatalog();
 }
 
-export function useDemoCatalog(reason) {
-    state.catalog = sampleLots;
-    state.catalogMeta = null;
-    state.catalogIsDemo = true;
-    state.catalogReason = reason;
-}
-
 export async function loadCatalog() {
     const grid = document.querySelector('[data-catalog]');
     if (grid) grid.innerHTML = '<div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>';
     const filters = state.catalogFilters;
+    state.catalog = [];
+    state.catalogMeta = null;
+    state.catalogReason = null;
+    state.catalogError = false;
     if (!state.token) {
-        useDemoCatalog('A listagem de excedentes exige autenticação.');
+        state.catalogReason = 'A listagem de excedentes exige autenticação.';
     } else {
         try {
             const payload = await api('/surplus', {
@@ -55,9 +43,9 @@ export async function loadCatalog() {
             });
             state.catalog = payload?.data || [];
             state.catalogMeta = payload?.meta || null;
-            state.catalogIsDemo = false;
         } catch (error) {
-            useDemoCatalog(error.message);
+            state.catalogReason = error.message;
+            state.catalogError = true;
         }
     }
     paintCatalogNotice();
@@ -68,13 +56,17 @@ export async function loadCatalog() {
 export function paintCatalogNotice() {
     const target = document.querySelector('[data-catalog-notice]');
     if (!target) return;
-    if (!state.catalogIsDemo) {
+    if (!state.catalogReason) {
         target.innerHTML = '';
         return;
     }
-    target.innerHTML = '<div class="demo-banner"><span>Lotes de demonstração — ' + esc(state.catalogReason) + ' Comprar e doar não funciona neste modo.</span>' +
-        (state.user ? '' : '<button class="button button-small" type="button" data-open-auth>Entrar na conta</button>') + '</div>';
+    const message = state.catalogError
+        ? 'Não foi possível carregar os excedentes agora. Verifique a conexão e tente novamente.'
+        : 'Entre na sua conta para consultar os excedentes reais disponíveis.';
+    target.innerHTML = '<div class="catalog-alert" role="status"><span>' + message + '</span>' +
+        (state.catalogError ? '<button class="button button-small button-ghost" type="button" data-retry-catalog>Tentar novamente</button>' : '<button class="button button-small" type="button" data-open-auth>Entrar na conta</button>') + '</div>';
     target.querySelector('[data-open-auth]')?.addEventListener('click', function () { openAuthOrDashboard('login'); });
+    target.querySelector('[data-retry-catalog]')?.addEventListener('click', loadCatalog);
 }
 
 export function paintCatalogPagination() {
@@ -109,11 +101,15 @@ export function paintCatalog() {
     grid.innerHTML = lots.map(function (lot, index) {
         const product = lot.product?.name || lot.agricultural_product?.name || 'Produto agrícola';
         const theme = lot.theme || ['tomato', '', 'green', 'purple'][index % 4];
+        const ownLot = Number(lot.producer?.id) === Number(state.user?.id);
+        const actions = ownLot
+            ? '<span class="footer-note">Este lote pertence a você.</span>'
+            : '<button class="button button-small" type="button" data-buy="' + esc(lot.id) + '">Comprar agora</button>' + (lot.donation_eligible ? '<button class="button button-ghost button-small" type="button" data-donate="' + esc(lot.id) + '">Doação</button>' : '');
         return '<article class="lot-card" data-lot-card>' +
             '<div class="lot-visual ' + theme + '"><span class="produce-shape" aria-hidden="true"></span><span class="lot-tag">' + esc(lot.quality_grade?.name || 'Qualidade verificada') + '</span></div>' +
-            '<div class="lot-body"><div class="lot-title"><h3>' + esc(product) + '</h3><div class="lot-price">' + money(lot.asking_price) + ' FRUSD<small>por ' + esc(lot.unit) + '</small></div></div>' +
-            '<div class="lot-meta"><span>◉ ' + esc(lot.origin?.city || 'Origem') + ', ' + esc(lot.origin?.state || 'BR') + '</span><span>◷ ' + esc(deadlineLabel(lot.available_until)) + '</span><span>' + esc(lot.quantity) + ' ' + esc(lot.unit) + '</span></div>' +
-            '<div class="lot-actions"><button class="button button-small" type="button" data-buy="' + esc(lot.id) + '">Comprar agora</button>' + (lot.donation_eligible ? '<button class="button button-ghost button-small" type="button" data-donate="' + esc(lot.id) + '">Doação</button>' : '') + '</div></div></article>';
+            '<div class="lot-body"><div class="lot-title"><h3>' + esc(product) + '</h3><div class="lot-price">' + money(lot.asking_price) + ' FRUSD<small>valor total do lote</small></div></div>' +
+            '<div class="lot-meta"><span>◉ ' + esc(lot.origin?.city || 'Origem') + ', ' + esc(lot.origin?.state || 'BR') + '</span><span>◷ ' + esc(deadlineLabel(lot.available_until)) + '</span><span>' + esc(quantityValue(lot.quantity)) + ' ' + esc(lot.unit) + '</span></div>' +
+            '<div class="lot-actions">' + actions + '</div></div></article>';
     }).join('');
     bindLotActions();
 }
@@ -157,10 +153,6 @@ export async function createTrade(lotId, donation) {
     if (!state.token) {
         openAuth(donation ? 'register' : 'login');
         toast('Conecte sua carteira e entre para continuar.');
-        return;
-    }
-    if (state.catalogIsDemo) {
-        toast('Estes lotes são de demonstração e não existem na API.', 'error');
         return;
     }
     try {

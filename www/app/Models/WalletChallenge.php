@@ -15,6 +15,8 @@ class WalletChallenge extends Model
 
     public const PURPOSE_VERIFY = 'verify';
 
+    public const PURPOSE_SURPLUS_PUBLICATION = 'surplus_publication';
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);

@@ -17,6 +17,8 @@ class MarketplaceTest extends TestCase
 {
     use LazilyRefreshDatabase;
 
+    private array $publicationKeys = [];
+
     public function test_producer_creates_surplus_and_private_minimum_price_is_hidden_from_buyer(): void
     {
         $producer = User::factory()->withRole(UserRole::Producer)->create();
@@ -24,8 +26,8 @@ class MarketplaceTest extends TestCase
         $product = AgriculturalProduct::factory()->create();
         $quality = QualityGrade::factory()->create();
 
-        Sanctum::actingAs($producer);
-        $response = $this->postJson('/api/v1/surplus', $this->lotPayload($product->id, $quality->id))
+        $this->prepareProducerWallet($producer);
+        $response = $this->postJson('/api/v1/surplus', $this->signedLotPayload($producer, $this->lotPayload($product->id, $quality->id)))
             ->assertCreated()
             ->assertJsonPath('data.minimum_price', '18000.000000');
 
@@ -64,9 +66,9 @@ class MarketplaceTest extends TestCase
         $product = AgriculturalProduct::factory()->create();
         $quality = QualityGrade::factory()->create();
 
-        Sanctum::actingAs($producer);
+        $this->prepareProducerWallet($producer);
         $this->postJson('/api/v1/surplus', array_replace(
-            $this->lotPayload($product->id, $quality->id),
+            $this->signedLotPayload($producer, $this->lotPayload($product->id, $quality->id)),
             ['accepted_logistics_modes' => ['producer_delivery']],
         ))->assertUnprocessable();
     }
@@ -189,5 +191,31 @@ class MarketplaceTest extends TestCase
             'donation_eligible' => true,
             'accepted_logistics_modes' => ['buyer_pickup', 'third_party_carrier'],
         ];
+    }
+
+    /** @param array<string, mixed> $payload */
+    private function signedLotPayload(User $producer, array $payload): array
+    {
+        $challenge = $this->postEmptyJson('/api/v1/auth/wallet/surplus-publication-challenge')
+            ->assertCreated()->json('data');
+
+        return $payload + [
+            'wallet_challenge_id' => $challenge['id'],
+            'wallet_signature' => base64_encode(sodium_crypto_sign_detached(
+                $challenge['message'],
+                sodium_crypto_sign_secretkey($this->publicationKeys[$producer->id]),
+            )),
+        ];
+    }
+
+    private function prepareProducerWallet(User $producer): void
+    {
+        $key = sodium_crypto_sign_keypair();
+        $producer->update([
+            'solana_wallet_address' => \App\Support\Base58::encode(sodium_crypto_sign_publickey($key)),
+            'solana_wallet_verified_at' => now(),
+        ]);
+        $this->publicationKeys[$producer->id] = $key;
+        Sanctum::actingAs($producer);
     }
 }
