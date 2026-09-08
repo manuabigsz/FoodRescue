@@ -16,23 +16,26 @@ solana-config/cli/*.yaml
 **/*.key
 
 # Container data and local databases
-postgres/
+# Barra inicial: só o diretório de dados na raiz, não docker/postgres/.
+/postgres/
 *.sql
 *.sql.gz
 *.dump
 
 # Dependencies and generated frontend/backend artifacts
 **/node_modules/
+**/target/
 **/vendor/
 **/public/build/
 **/public/hot
 **/public/fonts-manifest.dev.json
-**/storage/logs/
-**/storage/framework/cache/
-**/storage/framework/sessions/
-**/storage/framework/views/
-**/storage/framework/testing/
-**/storage/app/public/
+**/storage/logs/*
+**/storage/framework/cache/data/*
+**/storage/framework/sessions/*
+**/storage/framework/views/*
+**/storage/framework/testing/*
+**/storage/app/public/*
+!**/storage/**/.gitkeep
 **/.phpunit.result.cache
 **/.phpunit.cache/
 
@@ -57,3 +60,7 @@ Thumbs.db
 docker-compose.override.yml
 docker-compose.override.yaml
 compose.override.yaml
+
+# Stack local de desenvolvimento: vale só para a máquina de quem a usa.
+/compose.yaml
+/docker/

@@ -44,7 +44,8 @@ fn delivery_transitions_require_the_expected_actor_and_order() {
     let program = Pubkey::new_unique();
     let mut state = state(TradeState::STATUS_FUNDED);
     let id = state.trade_id.to_le_bytes();
-    let (trade, bump) = Pubkey::find_program_address(&[b"foodrescue_trade", &id], &program);
+    let (trade, bump) =
+        Pubkey::find_program_address(&[b"foodrescue_trade", &id, state.buyer.as_ref()], &program);
     state.trade_bump = bump;
 
     for (tag, actor, from, to) in [
@@ -203,7 +204,7 @@ fn cancellation_rejects_terminal_and_unknown_states_even_with_both_signers() {
 }
 
 #[test]
-fn rescue_proof_requires_both_actors_and_a_nonzero_hash() {
+fn rescue_proof_rejects_missing_ngo_signature_same_actors_and_empty_hash() {
     let program = Pubkey::new_unique();
     let authority = Pubkey::new_unique();
     let (protocol_key, protocol_bump) =
@@ -218,23 +219,22 @@ fn rescue_proof_requires_both_actors_and_a_nonzero_hash() {
     }
     .pack(&mut protocol_data)
     .unwrap();
-    for mask in 0..8 {
-        let accounts = vec![
+
+    let ngo = Pubkey::new_unique();
+    let producer = Pubkey::new_unique();
+
+    // A ordem das contas acompanha o programa: ngo, producer, ProtocolConfig,
+    // Rescue Proof PDA e System Program. A authority deixou de ser signatária.
+    let contas = |ngo_key: Pubkey, ngo_assina: bool, producer_key: Pubkey, producer_assina: bool| {
+        vec![
+            account(ngo_key, Pubkey::default(), ngo_assina, true, vec![]),
             account(
-                Pubkey::new_unique(),
+                producer_key,
                 Pubkey::default(),
-                mask & 1 != 0,
-                true,
-                vec![],
-            ),
-            account(
-                Pubkey::new_unique(),
-                Pubkey::default(),
-                mask & 2 != 0,
+                producer_assina,
                 false,
                 vec![],
             ),
-            account(authority, Pubkey::default(), mask & 4 != 0, false, vec![]),
             account(protocol_key, program, false, false, protocol_data.clone()),
             account(Pubkey::new_unique(), program, false, true, vec![]),
             account(
@@ -244,17 +244,41 @@ fn rescue_proof_requires_both_actors_and_a_nonzero_hash() {
                 false,
                 vec![],
             ),
-        ];
-        let mut instruction = vec![5];
-        instruction.extend_from_slice(&[1; 72]);
-        if mask == 7 {
-            instruction[41..73].fill(0);
-        }
+        ]
+    };
+    let mut instruction = vec![5];
+    instruction.extend_from_slice(&[1; 72]);
+
+    // Sem a assinatura da NGO nada acontece, mesmo com o produtor assinando.
+    for producer_assina in [false, true] {
         assert_eq!(
-            Processor::process(&program, &accounts, &instruction),
+            Processor::process(&program, &contas(ngo, false, producer, producer_assina), &instruction),
             Err(ProgramError::from(FoodRescueError::InvalidAccount))
         );
     }
+
+    // NGO e produtor não podem ser a mesma carteira: a atestação perde o sentido.
+    assert_eq!(
+        Processor::process(&program, &contas(ngo, true, ngo, false), &instruction),
+        Err(ProgramError::from(FoodRescueError::InvalidAccount))
+    );
+
+    // Hash de metadados zerado é recusado.
+    let mut sem_hash = instruction.clone();
+    sem_hash[41..73].fill(0);
+    assert_eq!(
+        Processor::process(&program, &contas(ngo, true, producer, false), &sem_hash),
+        Err(ProgramError::from(FoodRescueError::InvalidAccount))
+    );
+
+    // Com a NGO assinando e o produtor NÃO assinando, a execução passa de todos
+    // os guards de conta e só para na derivação do PDA — que aqui é aleatório de
+    // propósito. É o que prova que a assinatura do produtor não é exigida nesta
+    // instrução: ela vem depois, no `confirm_rescue_proof`.
+    assert_eq!(
+        Processor::process(&program, &contas(ngo, true, producer, false), &instruction),
+        Err(ProgramError::from(FoodRescueError::InvalidPda))
+    );
 }
 
 #[test]
@@ -309,8 +333,10 @@ fn cancellation_transfers_the_entire_vault_including_unsolicited_tokens() {
     let program = Pubkey::new_unique();
     let mut state = state(TradeState::STATUS_FUNDED);
     let id = state.trade_id.to_le_bytes();
-    let (trade, trade_bump) = Pubkey::find_program_address(&[b"foodrescue_trade", &id], &program);
-    let (vault, vault_bump) = Pubkey::find_program_address(&[b"foodrescue_vault", &id], &program);
+    let (trade, trade_bump) =
+        Pubkey::find_program_address(&[b"foodrescue_trade", &id, state.buyer.as_ref()], &program);
+    let (vault, vault_bump) =
+        Pubkey::find_program_address(&[b"foodrescue_vault", &id, state.buyer.as_ref()], &program);
     state.trade_bump = trade_bump;
     state.vault_bump = vault_bump;
     state.vault = vault;

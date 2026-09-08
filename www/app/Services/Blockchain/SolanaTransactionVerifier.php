@@ -47,7 +47,7 @@ class SolanaTransactionVerifier
                     return false;
                 }
 
-                $length = [0 => 105, 1 => 1, 2 => 33, 3 => 1, 4 => 1, 5 => 73, 6 => 1, 7 => 1, 8 => 1][$tag] ?? null;
+                $length = [0 => 105, 1 => 1, 2 => 33, 3 => 1, 4 => 1, 5 => 73, 6 => 1, 7 => 1, 8 => 1, 9 => 1][$tag] ?? null;
 
                 return $length !== null && strlen($data) === $length
                     && ord($data[0]) === $tag;

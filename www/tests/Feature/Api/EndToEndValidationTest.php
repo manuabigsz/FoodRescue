@@ -219,9 +219,9 @@ class EndToEndValidationTest extends TestCase
             $p = $this->prepared;
             $proof = $this->proof;
             $pda = $this->address(in_array($this->tag, [5, 9], true) ? 87 : 85);
-            $wallets = $this->tag === 5 ? $proof['wallets'] : ($p['wallets'] ?? []);
-            // A confirmação do produtor não devolve `wallets`; o signatário exigido
-            // é o produtor, que já está nas wallets da preparação do trade.
+            // As duas instruções do Proof of Rescue tiram os signatários da
+            // preparação do proof; as demais, da preparação do trade.
+            $wallets = in_array($this->tag, [5, 9], true) ? $proof['wallets'] : ($p['wallets'] ?? []);
             $keys = array_map(fn ($wallet) => ['pubkey' => $wallet, 'signer' => true], array_values(array_filter($wallets)));
             $vaultIndex = count($keys);
             $keys[] = ['pubkey' => $this->address(86), 'signer' => false];
