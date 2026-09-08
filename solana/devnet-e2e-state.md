@@ -12,7 +12,7 @@ Mint: 9tVPExJFkBU3yLgyo8fVzFVQj2t2boEESSpmoYikfxRr
 Upgrade Authority / deployer: 4mgxETzvnCVbWPaxndZBHi8Rg3hK1uJphezKGT47h4vg
 Mint authority: 4mgxETzvnCVbWPaxndZBHi8Rg3hK1uJphezKGT47h4vg
 Production Protocol Authority: 5wbZZiSzAbn7g8obEUJCQrdZTC7y6UrKuazvY7CVcu7T
-Production Treasury: 2WGhiqYXjw57REGfvjqJeQuxNXKz7QLjmU1txvhP58c
+Production Treasury: 2WGhiqYXjw57REGfvjqJeQuxNXKz7QLjmU1XtxvhP58c
 Temporary ProtocolConfig PDA: 9P1yVwr9hkJCrXRX8jUtDX4xzA43wkhj4LQd83GKNmMe
 ```
 

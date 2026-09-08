@@ -1,0 +1,21 @@
+{
+    "_comentario": "Endereços fixos do ambiente Devnet, usados pelos scripts de fluxo. Origem: devnet-e2e-state.md.",
+    "apiBaseUrl": "http://localhost:8080/api/v1",
+    "rpcUrl": "https://api.devnet.solana.com",
+    "keypairDir": "keypar/devnet-e2e",
+    "programId": "Ex6CN32gBUH2JALUwbqyn8ZMwWmBNrrHa4sjDNMAm5sd",
+    "mint": "9tVPExJFkBU3yLgyo8fVzFVQj2t2boEESSpmoYikfxRr",
+    "tokenAccounts": {
+        "buyer": "3m7RmzVWHhsfxDyjdfbLcMLTqsRVt75fL144jukQt2Ac",
+        "producer": "8BAdPuSP3pnjTWSiDkQzM8aaNY4tkSmhDgQkQrNZKkoE",
+        "carrier": "Hxohbx3XnHnX7iHVRMmCBYevyNYqxwbMvfYJ9JVZS3nk",
+        "treasury": "2VtF7ou1ixvWpbMGx4C4beSjRXATPBGrfEtVeaiaWVje"
+    },
+    "contas": {
+        "comprador": "comprador@foodrescue.test",
+        "produtor": "produtor@foodrescue.test",
+        "transportadora": "transportadora@foodrescue.test",
+        "ong": "ong@foodrescue.test",
+        "senha": "FoodRescue#Local2026"
+    }
+}

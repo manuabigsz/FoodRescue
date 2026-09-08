@@ -1,0 +1,30 @@
+{
+    "name": "foodrescue-solana-scripts",
+    "private": true,
+    "description": "Scripts que assinam e enviam as transações do programa FoodRescue na Devnet. O Laravel prepara as instruções, mas nunca assina.",
+    "scripts": {
+        "pagar": "node fluxo.mjs pagar",
+        "entregar": "node fluxo.mjs entregar",
+        "liquidar": "node fluxo.mjs liquidar",
+        "protocol:init": "node initialize-devnet-protocol.mjs",
+        "e2e:initialize": "node execute-devnet-initialize-e2e.cjs",
+        "e2e:funding": "node execute-devnet-funding-e2e.cjs",
+        "e2e:delivery": "node execute-devnet-delivery-e2e.cjs",
+        "e2e:settlement": "node execute-devnet-settlement-e2e.cjs",
+        "e2e:settlement:confirm": "node confirm-devnet-settlement-e2e.cjs",
+        "e2e:donation:initialize": "node execute-devnet-donation-initialize-e2e.cjs",
+        "e2e:donation:funding": "node execute-devnet-donation-funding-e2e.cjs",
+        "e2e:donation:delivery": "node execute-devnet-donation-delivery-e2e.cjs",
+        "e2e:donation:proof": "node execute-devnet-rescue-proof-e2e.cjs",
+        "e2e:donation:settlement": "node execute-devnet-donation-settlement-e2e.cjs",
+        "token": "node token.mjs"
+    },
+    "dependencies": {
+        "@solana/web3.js": "^1.98.0"
+    },
+    "optionalDependencies": {
+        "@metaplex-foundation/mpl-token-metadata": "^3.3.0",
+        "@metaplex-foundation/umi": "^0.9.2",
+        "@metaplex-foundation/umi-bundle-defaults": "^0.9.2"
+    }
+}

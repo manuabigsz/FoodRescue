@@ -2,11 +2,16 @@ const fs = require('node:fs');
 const api = process.env.API_BASE_URL || 'http://food-rescue:8080/api/v1';
 const base = '/workspace/keypar/devnet-e2e';
 const actors = JSON.parse(fs.readFileSync(`${base}/actors.local.json`, 'utf8'));
+
+/** Token da API por ator: o ambiente tem prioridade sobre o actors.local.json,
+ *  que guarda sessões de outra execução e pode estar vencido. */
+const tokenFor = (name) => process.env[`API_TOKEN_${String(name).toUpperCase()}`] || actors[name]?.token;
+
 const statePath = `${base}/donation.local.json`;
 const state = fs.existsSync(statePath) ? JSON.parse(fs.readFileSync(statePath, 'utf8')) : {};
 
 async function request(path, actor, method = 'GET', payload) {
-  const response = await fetch(`${api}${path}`, { method, headers: { 'content-type': 'application/json', authorization: `Bearer ${actors[actor].token}` }, body: payload === undefined ? undefined : JSON.stringify(payload) });
+  const response = await fetch(`${api}${path}`, { method, headers: { 'content-type': 'application/json', authorization: `Bearer ${tokenFor(actor)}` }, body: payload === undefined ? undefined : JSON.stringify(payload) });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(`${method} ${path} ${response.status}: ${JSON.stringify(body)}`);
   return body.data ?? body;

@@ -3,23 +3,37 @@ const { Connection, Keypair, PublicKey, Transaction, TransactionInstruction, sen
 
 const api = process.env.API_BASE_URL || 'http://food-rescue:8080/api/v1';
 const rpc = process.env.SOLANA_RPC_URL || 'https://api.devnet.solana.com';
-const base = '/workspace/keypar/devnet-e2e';
+const base = process.env.KEYPAIR_DIR || '/workspace/keypar/devnet-e2e';
 const actors = JSON.parse(fs.readFileSync(`${base}/actors.local.json`, 'utf8'));
 const trade = JSON.parse(fs.readFileSync(`${base}/trade.local.json`, 'utf8'));
 const init = JSON.parse(fs.readFileSync(`${base}/blockchain-initialize.local.json`, 'utf8'));
 const buyer = Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync(`${base}/buyer.json`, 'utf8'))));
+
+/** O trade alvo vem do ambiente quando a operação foi criada pela interface. */
+const tradeId = Number(process.env.TRADE_ID || trade.trade_id);
+if (!Number.isInteger(tradeId) || tradeId <= 0) {
+  throw new Error('Defina TRADE_ID com o número da operação (ex.: 12). Valor recebido: ' + JSON.stringify(process.env.TRADE_ID));
+}
+
+
+function tradeIdSeed() {
+  const seed = Buffer.alloc(8);
+  seed.writeBigUInt64LE(BigInt(tradeId));
+
+  return seed;
+}
 const programId = new PublicKey(process.env.PROGRAM_ID);
 const tokenProgram = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA');
 
 async function request(path, method = 'GET', payload) {
-  const response = await fetch(`${api}${path}`, { method, headers: { 'content-type': 'application/json', authorization: `Bearer ${actors.buyer.token}` }, body: payload === undefined ? undefined : JSON.stringify(payload) });
+  const response = await fetch(`${api}${path}`, { method, headers: { 'content-type': 'application/json', authorization: `Bearer ${process.env.API_TOKEN || actors.buyer.token}` }, body: payload === undefined ? undefined : JSON.stringify(payload) });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(`${method} ${path} ${response.status}: ${JSON.stringify(body)}`);
   return body.data ?? body;
 }
 
 async function main() {
-  const prepared = await request(`/trades/${trade.trade_id}/blockchain/settlement/prepare`, 'POST');
+  const prepared = await request(`/trades/${tradeId}/blockchain/settlement/prepare`, 'POST');
   const accounts = prepared.settle_instruction.accounts;
   const known = {
     buyer: buyer.publicKey,
@@ -36,7 +50,7 @@ async function main() {
   const instruction = new TransactionInstruction({ programId, keys, data: Buffer.from(prepared.settle_instruction.data_base64, 'base64') });
   const signature = await sendAndConfirmTransaction(new Connection(rpc, 'confirmed'), new Transaction().add(instruction), [buyer], { commitment: 'confirmed' });
   console.log(`settlement_signature=${signature}`);
-  const confirmed = await request(`/trades/${trade.trade_id}/blockchain/settlement/confirm`, 'POST', { signature });
+  const confirmed = await request(`/trades/${tradeId}/blockchain/settlement/confirm`, 'POST', { signature });
   console.log(`backend_status=${confirmed.status || confirmed.trade_status || 'confirmed'}`);
   fs.writeFileSync(`${base}/blockchain-settlement.local.json`, `${JSON.stringify({ signature, confirmed }, null, 2)}\n`, { mode: 0o600 });
 }
