@@ -10,6 +10,7 @@ use App\Http\Requests\Api\Surplus\UpdateSurplusRequest;
 use App\Http\Resources\SurplusLotResource;
 use App\Models\SurplusLot;
 use App\Services\Marketplace\SurplusMarketplace;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\Gate;
@@ -19,14 +20,34 @@ class SurplusLotController extends Controller
     public function index(ListSurplusRequest $request): AnonymousResourceCollection
     {
         $data = $request->validated();
-        $query = SurplusLot::query()
-            ->with(['producer.roles', 'agriculturalProduct', 'qualityGrade'])
-            ->where('available_until', '>', now());
+        $query = SurplusLot::query()->with(['producer.roles', 'agriculturalProduct', 'qualityGrade']);
 
-        if (! isset($data['status'])) {
-            $query->where('status', SurplusStatus::Open->value);
+        /**
+         * A vitrine mostra apenas lotes abertos e dentro do prazo. O produtor
+         * pedindo os próprios lotes vê todo o histórico, inclusive reservados e
+         * vencidos, porque é a partir dessa lista que ele acompanha o estoque.
+         */
+        $ownLotsOnly = $request->boolean('mine');
+        if ($ownLotsOnly) {
+            $query->where('producer_id', $request->user()->id);
         } else {
+            $query->where('available_until', '>', now());
+        }
+
+        if (isset($data['status'])) {
             $query->where('status', $data['status']);
+        } elseif (! $ownLotsOnly) {
+            $query->where('status', SurplusStatus::Open->value);
+        }
+        if (isset($data['search'])) {
+            $term = '%'.addcslashes(mb_strtolower($data['search']), '%_\\').'%';
+            $query->where(function (Builder $scope) use ($term): void {
+                $scope->whereRaw('LOWER(origin_city) LIKE ?', [$term])
+                    ->orWhereHas(
+                        'agriculturalProduct',
+                        fn (Builder $product) => $product->whereRaw('LOWER(name) LIKE ?', [$term]),
+                    );
+            });
         }
         if (isset($data['product_id'])) {
             $query->where('agricultural_product_id', $data['product_id']);

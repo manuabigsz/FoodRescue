@@ -11,6 +11,8 @@ class ListSurplusRequest extends ApiRequest
     public function rules(): array
     {
         return [
+            'mine' => ['sometimes', 'boolean'],
+            'search' => ['sometimes', 'string', 'max:120'],
             'product_id' => ['sometimes', 'integer', 'exists:agricultural_products,id'],
             'quality_grade_id' => ['sometimes', 'integer', 'exists:quality_grades,id'],
             'city' => ['sometimes', 'string', 'max:120'],

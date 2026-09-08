@@ -15,7 +15,7 @@ class SurplusLotResource extends JsonResource
 
         return [
             'id' => $this->id,
-            'producer' => new UserResource($this->whenLoaded('producer')),
+            'producer' => new PublicUserResource($this->whenLoaded('producer')),
             'product' => new AgriculturalProductResource($this->whenLoaded('agriculturalProduct')),
             'quality_grade' => new QualityGradeResource($this->whenLoaded('qualityGrade')),
             'quantity' => $this->quantity,

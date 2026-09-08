@@ -13,7 +13,7 @@ class ShippingOfferResource extends JsonResource
             'id' => $this->id,
             'shipping_request_id' => $this->shipping_request_id,
             'carrier_id' => $this->carrier_id,
-            'carrier' => new UserResource($this->whenLoaded('carrier')),
+            'carrier' => new PublicUserResource($this->whenLoaded('carrier')),
             'amount' => $this->amount,
             'pickup_at' => $this->pickup_at?->toISOString(),
             'estimated_delivery_at' => $this->estimated_delivery_at?->toISOString(),

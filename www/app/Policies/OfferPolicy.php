@@ -15,6 +15,18 @@ class OfferPolicy
         return $user->status === UserStatus::Active && $user->hasRole(UserRole::Buyer->value) && $lot->producer_id !== $user->id;
     }
 
+    /**
+     * As propostas de um lote são visíveis para o produtor dono e para o administrador.
+     */
+    public function viewAny(User $user, SurplusLot $lot): bool
+    {
+        if ($user->status !== UserStatus::Active) {
+            return false;
+        }
+
+        return $lot->producer_id === $user->id || $user->hasRole(UserRole::Admin->value);
+    }
+
     public function respond(User $user, Offer $offer): bool
     {
         return $user->status === UserStatus::Active

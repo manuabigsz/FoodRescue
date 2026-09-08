@@ -308,6 +308,18 @@ class AuthenticationTest extends TestCase
             ->assertStatus(500)->assertExactJson(['message' => 'Erro interno do servidor.']);
     }
 
+    public function test_deliberate_server_side_aborts_keep_their_message(): void
+    {
+        config(['app.debug' => false]);
+        Route::get('/api/v1/test-unavailable', function (): void {
+            abort(503, 'ProtocolConfig ainda não foi inicializado.');
+        });
+
+        $this->getJson('/api/v1/test-unavailable')
+            ->assertStatus(503)
+            ->assertExactJson(['message' => 'ProtocolConfig ainda não foi inicializado.']);
+    }
+
     /** @return array<string, mixed> */
     private function registration(array $changes = []): array
     {

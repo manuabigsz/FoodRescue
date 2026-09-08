@@ -19,7 +19,7 @@ class RatingResource extends JsonResource
             'target_user_id' => $this->target_user_id,
             'rating' => $this->rating,
             'comment' => $this->comment,
-            'reviewer' => new UserResource($this->whenLoaded('reviewer')),
+            'reviewer' => new PublicUserResource($this->whenLoaded('reviewer')),
             'created_at' => $this->created_at?->toISOString(),
         ];
     }

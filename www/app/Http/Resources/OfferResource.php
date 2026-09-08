@@ -12,7 +12,7 @@ class OfferResource extends JsonResource
         return [
             'id' => $this->id,
             'surplus_lot_id' => $this->surplus_lot_id,
-            'buyer' => new UserResource($this->whenLoaded('buyer')),
+            'buyer' => new PublicUserResource($this->whenLoaded('buyer')),
             'amount' => $this->amount,
             'status' => $this->status->value,
             'expires_at' => $this->expires_at?->toISOString(),

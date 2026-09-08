@@ -10,6 +10,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Spatie\Permission\Middleware\PermissionMiddleware;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -30,14 +31,23 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*') || $request->expectsJson(),
         );
-        $exceptions->respond(function (Response $response) {
+        $exceptions->respond(function (Response $response, Throwable $exception) {
             if (! request()->is('api/*')) {
                 return $response;
             }
 
             $status = $response->getStatusCode();
             if ($status >= 500) {
-                $response = response()->json(['message' => 'Erro interno do servidor.'], $status);
+                /**
+                 * Um abort() explícito carrega uma mensagem escrita para o cliente —
+                 * "serviço indisponível", "protocolo não inicializado". Só as exceções
+                 * não tratadas são mascaradas, porque o texto delas pode vazar detalhes.
+                 */
+                $deliberate = $exception instanceof HttpExceptionInterface && $exception->getMessage() !== '';
+                $response = response()->json(
+                    ['message' => $deliberate ? $exception->getMessage() : 'Erro interno do servidor.'],
+                    $status,
+                );
             } elseif ($status === 404) {
                 $response = response()->json(['message' => 'Recurso não encontrado.'], 404);
             } elseif ($status >= 400 && $response instanceof JsonResponse) {

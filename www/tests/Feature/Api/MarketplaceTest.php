@@ -91,6 +91,85 @@ class MarketplaceTest extends TestCase
         $this->assertDatabaseMissing('offers', ['surplus_lot_id' => $lot->id, 'status' => OfferStatus::Pending->value]);
     }
 
+    public function test_catalog_search_matches_product_name_and_origin_city(): void
+    {
+        $tomato = SurplusLot::factory()->create([
+            'agricultural_product_id' => AgriculturalProduct::factory()->create(['name' => 'Tomate italiano']),
+            'origin_city' => 'Mogi das Cruzes',
+        ]);
+        $carrot = SurplusLot::factory()->create([
+            'agricultural_product_id' => AgriculturalProduct::factory()->create(['name' => 'Cenoura']),
+            'origin_city' => 'São Gotardo',
+        ]);
+
+        Sanctum::actingAs(User::factory()->withRole(UserRole::Buyer)->create());
+
+        $this->getJson('/api/v1/surplus?search=tomate')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $tomato->id);
+
+        $this->getJson('/api/v1/surplus?search=gotardo')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $carrot->id);
+
+        $this->getJson('/api/v1/surplus?search=%25')->assertOk()->assertJsonCount(0, 'data');
+    }
+
+    public function test_mine_filter_returns_the_full_history_of_the_producer_own_lots(): void
+    {
+        $producer = User::factory()->withRole(UserRole::Producer)->create();
+        $open = SurplusLot::factory()->create(['producer_id' => $producer->id]);
+        $reserved = SurplusLot::factory()->create(['producer_id' => $producer->id, 'status' => SurplusStatus::Reserved]);
+        $expired = SurplusLot::factory()->create(['producer_id' => $producer->id, 'available_until' => now()->subDay()]);
+        $foreign = SurplusLot::factory()->create();
+
+        Sanctum::actingAs($producer);
+        $mine = $this->getJson('/api/v1/surplus?mine=1')->assertOk()->json('data');
+        $ids = array_column($mine, 'id');
+
+        sort($ids);
+        $expected = [$open->id, $reserved->id, $expired->id];
+        sort($expected);
+        $this->assertSame($expected, $ids);
+        $this->assertNotContains($foreign->id, $ids);
+
+        $this->getJson('/api/v1/surplus')->assertOk()->assertJsonCount(2, 'data');
+    }
+
+    public function test_producer_lists_offers_of_own_lot_and_buyer_contact_stays_private(): void
+    {
+        $lot = SurplusLot::factory()->create();
+        $buyer = User::factory()->withRole(UserRole::Buyer)->create();
+
+        Sanctum::actingAs($buyer);
+        $offerId = $this->postJson('/api/v1/surplus/'.$lot->id.'/offers', ['amount' => '19000'])
+            ->assertCreated()->json('data.id');
+
+        Sanctum::actingAs($lot->producer);
+        $this->getJson('/api/v1/surplus/'.$lot->id.'/offers')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $offerId)
+            ->assertJsonPath('data.0.buyer.id', $buyer->id)
+            ->assertJsonMissingPath('data.0.buyer.email');
+
+        Sanctum::actingAs($buyer);
+        $this->getJson('/api/v1/surplus/'.$lot->id.'/offers')->assertForbidden();
+    }
+
+    public function test_producer_contact_is_not_exposed_in_the_public_catalog(): void
+    {
+        $lot = SurplusLot::factory()->create();
+
+        Sanctum::actingAs(User::factory()->withRole(UserRole::Buyer)->create());
+        $this->getJson('/api/v1/surplus/'.$lot->id)
+            ->assertOk()
+            ->assertJsonPath('data.producer.id', $lot->producer_id)
+            ->assertJsonMissingPath('data.producer.email');
+    }
+
     /** @return array<string, mixed> */
     private function lotPayload(int $productId, int $qualityId): array
     {

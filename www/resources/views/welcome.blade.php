@@ -25,11 +25,12 @@
             <div class="header-actions">
                 <span class="network-chip"><i></i> Devnet</span>
                 <button class="button button-ghost wallet-button" type="button" data-open-auth>Conectar carteira</button>
+                <button class="button button-ghost button-small logout-button" type="button" data-logout hidden>Sair</button>
                 <button class="menu-button" type="button" aria-expanded="false" aria-controls="mobile-nav" aria-label="Abrir menu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
             </div>
         </header>
         <nav class="mobile-nav" id="mobile-nav" aria-label="Navegação móvel" hidden>
-            <a href="#/catalogo">Excedentes</a><a href="#/doacoes">Doações</a><a href="#/acompanhamento">Acompanhar</a><a href="#/rede">Solana</a><a href="#/dashboard">Meu painel</a>
+            <a href="#/catalogo">Excedentes</a><a href="#/doacoes">Doações</a><a href="#/acompanhamento">Acompanhar</a><a href="#/rede">Solana</a><a href="#/dashboard">Meu painel</a><button class="mobile-nav-action" type="button" data-logout hidden>Sair</button>
         </nav>
         <main id="main-content" tabindex="-1" aria-live="polite"></main>
         <footer class="site-footer">

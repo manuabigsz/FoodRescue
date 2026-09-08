@@ -10,10 +10,20 @@ use App\Models\Offer;
 use App\Models\SurplusLot;
 use App\Services\Marketplace\SurplusMarketplace;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\Gate;
 
 class OfferController extends Controller
 {
+    public function index(SurplusLot $surplusLot): AnonymousResourceCollection
+    {
+        Gate::authorize('viewAny', [Offer::class, $surplusLot]);
+
+        return OfferResource::collection(
+            $surplusLot->offers()->with('buyer.roles')->latest('id')->get(),
+        );
+    }
+
     public function store(StoreOfferRequest $request, SurplusLot $surplusLot, SurplusMarketplace $marketplace): JsonResponse
     {
         Gate::authorize('create', [Offer::class, $surplusLot]);

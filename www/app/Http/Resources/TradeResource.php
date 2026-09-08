@@ -13,6 +13,7 @@ class TradeResource extends JsonResource
         return [
             'id' => $this->id,
             'surplus_lot_id' => $this->surplus_lot_id,
+            'surplus_lot' => new SurplusLotResource($this->whenLoaded('surplusLot')),
             'producer_id' => $this->producer_id,
             'buyer_id' => $this->buyer_id,
             'recipient_id' => $this->buyer_id,

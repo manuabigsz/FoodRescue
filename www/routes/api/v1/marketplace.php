@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\BlockchainTradeController;
+use App\Http\Controllers\Api\CatalogController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\DeliveryController;
 use App\Http\Controllers\Api\DonationController;
@@ -14,16 +15,22 @@ use App\Http\Controllers\Api\TradeCancellationController;
 use App\Http\Controllers\Api\TradeController;
 use Illuminate\Support\Facades\Route;
 
+Route::get('catalog/products', [CatalogController::class, 'products'])->name('catalog.products.index');
+Route::get('catalog/quality-grades', [CatalogController::class, 'qualityGrades'])->name('catalog.quality_grades.index');
+
 Route::get('surplus', [SurplusLotController::class, 'index'])->name('surplus.index');
 Route::get('surplus/{surplusLot}', [SurplusLotController::class, 'show'])->whereNumber('surplusLot')->name('surplus.show');
 Route::post('surplus', [SurplusLotController::class, 'store'])->middleware('throttle:sensitive')->name('surplus.store');
 Route::patch('surplus/{surplusLot}', [SurplusLotController::class, 'update'])->whereNumber('surplusLot')->middleware('throttle:sensitive')->name('surplus.update');
 Route::post('surplus/{surplusLot}/cancel', [SurplusLotController::class, 'cancel'])->whereNumber('surplusLot')->middleware('throttle:sensitive')->name('surplus.cancel');
 
+Route::get('surplus/{surplusLot}/offers', [OfferController::class, 'index'])->whereNumber('surplusLot')->name('offers.index');
 Route::post('surplus/{surplusLot}/offers', [OfferController::class, 'store'])->whereNumber('surplusLot')->middleware('throttle:sensitive')->name('offers.store');
 Route::post('offers/{offer}/accept', [OfferController::class, 'accept'])->whereNumber('offer')->middleware('throttle:sensitive')->name('offers.accept');
 Route::post('offers/{offer}/reject', [OfferController::class, 'reject'])->whereNumber('offer')->middleware('throttle:sensitive')->name('offers.reject');
 Route::post('surplus/{surplusLot}/donations/accept', [DonationController::class, 'accept'])->whereNumber('surplusLot')->middleware('throttle:sensitive')->name('donations.accept');
+Route::get('trades', [TradeController::class, 'index'])->name('trades.index');
+Route::get('trades/{trade}', [TradeController::class, 'show'])->whereNumber('trade')->name('trades.show');
 Route::post('surplus/{surplusLot}/buy-now', [TradeController::class, 'buyNow'])->whereNumber('surplusLot')->middleware('throttle:sensitive')->name('trades.buy_now');
 Route::post('trades/{trade}/cancel', [TradeCancellationController::class, 'cancel'])->whereNumber('trade')->middleware('throttle:sensitive')->name('trades.cancel');
 
