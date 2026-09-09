@@ -19,11 +19,11 @@ waste — with payment held in a Solana escrow that only releases against confir
 
 ## The problem
 
-Roughly a third of what Brazil harvests never reaches anyone. Much of that waste isn't pests and it
-isn't logistics: it's **the absence of a trustworthy counterparty at the right moment**. A grower has
-40 tonnes of tomatoes with five days of shelf life and no channel to move them; a buyer won't prepay a
-stranger; an NGO can't guarantee anyone that the freight will be paid; a carrier won't roll without
-certainty of payment.
+The FAO estimates that roughly a third of the world's food production is lost between harvest and
+plate. Much of that waste isn't pests and it isn't logistics: it's **the absence of a trustworthy
+counterparty at the right moment**. A producer has 40 tonnes of tomatoes with five days of shelf life
+and no channel to move them; a buyer won't prepay a stranger; an NGO can't guarantee anyone that the
+freight will be paid; a carrier won't roll without certainty of payment.
 
 Everyone wants the same deal, and nobody can afford to trust first.
 
@@ -31,36 +31,30 @@ Everyone wants the same deal, and nobody can afford to trust first.
 
 FoodRescue takes trust out of the equation. The buyer deposits into an **on-chain escrow**; the money
 sits in a vault that nobody controls — not even the platform. Release is automatic and atomic once
-delivery is confirmed: grower, carrier and protocol are all paid in the same transaction.
+delivery is confirmed: producer, carrier and protocol are all paid in the same transaction.
 
 ```
-                    ┌──────────────────────────────────────────┐
-                    │  Vault PDA — nobody holds the key        │
-   Buyer ──────────▶│  authority = trade PDA                  │──────▶ Grower  (product − fee)
-   deposits         │  balance = product + freight            │──────▶ Carrier (freight)
-   FRUSD            └──────────────────────────────────────────┘──────▶ Treasury (2%)
-                            releases only in `delivered`
+                     ┌──────────────────────────────────────┐
+                     │   Vault PDA — nobody holds the key    │──▶ Producer (product − fee)
+ Buyer ─────────────▶│   authority = trade PDA               │──▶ Carrier  (freight)
+ deposits FRUSD      │   balance   = product + freight       │──▶ Treasury (2%)
+                     └──────────────────────────────────────┘
+                           releases only in `delivered`
 ```
 
 **The backend never signs anything.** It assembles the instruction, hands it to the actor's own wallet
 (Phantom or compatible) to sign, and then **verifies the result on chain** byte for byte against what
 was promised. There is no private key on the server.
 
-## Actors
-
-| Actor | What they do |
-|---|---|
-| 🌱 **Grower** | Signs and publishes the surplus, accepts offers, marks ready for pickup |
-| 🛒 **Buyer** | Bids or buys outright, funds the escrow, confirms receipt, settles |
-| 🚚 **Carrier** | Quotes freight in an open quotation market, confirms pickup |
-| 🤝 **NGO** | Receives a lot as a donation, pays only freight, attests the *Proof of Rescue* |
-| 🛡️ **Admin** | Reference catalogue, operational deadlines, on-chain `ProtocolConfig` |
+Five actors take part — producer, buyer, carrier, NGO and admin. What each one brings and receives is
+laid out in [section 4 of the Whitepaper](docs/WHITEPAPER-EN.pdf); which key signs which instruction
+is in [section 5 of the Yellowpaper](docs/YELLOWPAPER-EN.pdf).
 
 ## Life of a trade
 
 ```mermaid
 flowchart LR
-    A[reserved] --> B[logistics]
+    A[reserved] --> B[shipping_quotation]
     B --> C[waiting_payment]
     C --> D[funded]
     D --> E[ready_for_pickup]
@@ -81,9 +75,12 @@ flowchart LR
     style I fill:#c9ef77,stroke:#a8d950,color:#123c2d
 ```
 
+The happy path only. Branches — buyer-arranged pickup, cancellation, payment timeout — are in the
+Whitepaper.
+
 Everything up to `waiting_payment` happens in the UI. From there on, each step requires a transaction
-signed on Solana — the screen shows who signs and what. `proof_pending` only appears for donations
-with freight, where the NGO and the grower attest the rescue in two independent signatures.
+signed on Solana: the screen shows who signs and what. `proof_pending` only appears for donations with
+freight, where the NGO and the producer attest the rescue in two independent signatures.
 
 ## Architecture
 
@@ -185,7 +182,7 @@ docker exec food-rescue-postgres psql -U agro -d postgres \
 
 | Document | About | |
 |---|---|---|
-| **Whitepaper** | Problem, thesis, protocol design, economics and impact | [PDF](docs/WHITEPAPER-EN.pdf) · [Markdown](docs/WHITEPAPER.md) |
+| **Whitepaper** | Problem, thesis, protocol design, actors, economics and impact | [PDF](docs/WHITEPAPER-EN.pdf) · [Markdown](docs/WHITEPAPER.md) |
 | **Yellowpaper** | Technical specification: instructions, PDAs, byte layout, invariants | [PDF](docs/YELLOWPAPER-EN.pdf) · [Markdown](docs/YELLOWPAPER.md) |
 | **Domain docs** | Functional documentation per domain (registration, payments, logistics, donations) | [`www/docs/`](www/docs/) |
 
