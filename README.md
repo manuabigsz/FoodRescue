@@ -1,25 +1,110 @@
-# FoodRescue
+<div align="center">
 
-Marketplace que dá destino comercial ou social a excedentes agrícolas antes que virem desperdício. O pagamento fica em custódia num programa Solana e só é liberado quando a entrega é confirmada — nenhuma das partes precisa confiar na outra.
+# 🥬 FoodRescue
 
-## Estrutura
+**Food with a destination.**
+
+A marketplace that finds a commercial or social outlet for agricultural surplus before it becomes
+waste — with payment held in a Solana escrow that only releases against confirmed delivery.
+
+`Laravel 13` · `PHP 8.3+` · `PostgreSQL 17` · `Solana (native Rust, no Anchor)` · `Ed25519`
+
+[Whitepaper](docs/WHITEPAPER.md) · [Yellowpaper](docs/YELLOWPAPER.md) · [Domain docs](www/docs/) · [Code review](www/docs/CODE_REVIEW.md)
+
+</div>
+
+---
+
+## The problem
+
+Roughly a third of what Brazil harvests never reaches anyone. Much of that waste isn't pests and it
+isn't logistics: it's **the absence of a trustworthy counterparty at the right moment**. A grower has
+40 tonnes of tomatoes with five days of shelf life and no channel to move them; a buyer won't prepay a
+stranger; an NGO can't guarantee anyone that the freight will be paid; a carrier won't roll without
+certainty of payment.
+
+Everyone wants the same deal, and nobody can afford to trust first.
+
+## The solution
+
+FoodRescue takes trust out of the equation. The buyer deposits into an **on-chain escrow**; the money
+sits in a vault that nobody controls — not even the platform. Release is automatic and atomic once
+delivery is confirmed: grower, carrier and protocol are all paid in the same transaction.
 
 ```
-www/      aplicação Laravel: API em /api/v1 e front-end
-solana/   programa Solana em Rust + scripts de deploy e E2E
+                    ┌──────────────────────────────────────────┐
+                    │  Vault PDA — nobody holds the key        │
+   Buyer ──────────▶│  authority = trade PDA                  │──────▶ Grower  (product − fee)
+   deposits         │  balance = product + freight            │──────▶ Carrier (freight)
+   FRUSD            └──────────────────────────────────────────┘──────▶ Treasury (2%)
+                            releases only in `delivered`
 ```
 
-São dois projetos independentes. O Laravel **prepara** as instruções on-chain e depois **confere** o resultado na cadeia, mas nunca assina — não guarda chave privada nenhuma. Quem assina é a carteira do próprio ator, pela extensão do navegador (Phantom ou compatível). Os scripts em `solana/` assinam com keypairs locais só no deploy e nos testes E2E.
+**The backend never signs anything.** It assembles the instruction, hands it to the actor's own wallet
+(Phantom or compatible) to sign, and then **verifies the result on chain** byte for byte against what
+was promised. There is no private key on the server.
 
-## Atores
+## Actors
 
-Produtor assina e publica o excedente · Comprador compra ou ONG recebe como doação · Transportadora cota o frete · Administrador cuida do catálogo e dos prazos.
+| Actor | What they do |
+|---|---|
+| 🌱 **Grower** | Signs and publishes the surplus, accepts offers, marks ready for pickup |
+| 🛒 **Buyer** | Bids or buys outright, funds the escrow, confirms receipt, settles |
+| 🚚 **Carrier** | Quotes freight in an open quotation market, confirms pickup |
+| 🤝 **NGO** | Receives a lot as a donation, pays only freight, attests the *Proof of Rescue* |
+| 🛡️ **Admin** | Reference catalogue, operational deadlines, on-chain `ProtocolConfig` |
 
-## Como rodar
+## Life of a trade
 
-Requisitos: PHP 8.3+, Composer, Node 20+, PostgreSQL 17 (ou Docker).
+```mermaid
+flowchart LR
+    A[reserved] --> B[logistics]
+    B --> C[waiting_payment]
+    C --> D[funded]
+    D --> E[ready_for_pickup]
+    E --> F[in_transit]
+    F --> G[delivered]
+    G --> H[proof_pending]
+    H --> I[completed]
+    G --> I
 
-**1. Banco**
+    style A fill:#f5f7ef,stroke:#dce4dc,color:#17211d
+    style B fill:#f5f7ef,stroke:#dce4dc,color:#17211d
+    style C fill:#f2b94b,stroke:#f2b94b,color:#17211d
+    style D fill:#123c2d,stroke:#1c563f,color:#f5f7ef
+    style E fill:#1c563f,stroke:#1c563f,color:#f5f7ef
+    style F fill:#1c563f,stroke:#1c563f,color:#f5f7ef
+    style G fill:#1c563f,stroke:#1c563f,color:#f5f7ef
+    style H fill:#8769d2,stroke:#8769d2,color:#ffffff
+    style I fill:#c9ef77,stroke:#a8d950,color:#123c2d
+```
+
+Everything up to `waiting_payment` happens in the UI. From there on, each step requires a transaction
+signed on Solana — the screen shows who signs and what. `proof_pending` only appears for donations
+with freight, where the NGO and the grower attest the rescue in two independent signatures.
+
+## Architecture
+
+```
+FoodRescue/
+├── www/          Laravel — /api/v1 + front-end (vanilla SPA, no framework)
+│   ├── app/      Thin controllers, Services holding business rules, Policies
+│   ├── docs/     Functional documentation per domain
+│   └── tests/    PHPUnit (backend) + Vitest (front-end)
+├── solana/       Native Rust program + devnet deploy and E2E scripts
+│   ├── src/      instruction.rs · processor.rs · state.rs (1,369 lines, zero Anchor)
+│   └── tests/    program.rs · validation.rs
+└── docs/         Whitepaper and Yellowpaper
+```
+
+These are **two independent projects**. Laravel prepares and verifies; the actor's wallet signs. The
+scripts under `solana/` use local keypairs only for deployment and E2E tests.
+
+## Running it
+
+Requirements: PHP 8.3+, Composer, Node 20+, PostgreSQL 17 (or Docker).
+
+**1. Database**
 
 ```bash
 docker run -d --name food-rescue-postgres -p 5432:5432 \
@@ -27,72 +112,78 @@ docker run -d --name food-rescue-postgres -p 5432:5432 \
   postgres:17-alpine
 ```
 
-**2. Aplicação**
+**2. Application**
 
 ```bash
 cd www
-cp .env.example .env          # ajuste DB_HOST para 127.0.0.1 fora do Docker
-composer install
-npm install
+cp .env.example .env          # set DB_HOST to 127.0.0.1 outside Docker
+composer install && npm install
 php artisan key:generate
 php artisan migrate --seed
 ```
 
-O seed cria papéis, permissões, o catálogo de produtos e o administrador definido em `INITIAL_ADMIN_EMAIL` / `INITIAL_ADMIN_PASSWORD` no `.env`. A senha precisa ter no mínimo 15 caracteres.
+Seeding creates roles, permissions, the product catalogue and the administrator defined by
+`INITIAL_ADMIN_EMAIL` / `INITIAL_ADMIN_PASSWORD`. The initial admin password must be 15+ characters.
 
-**3. Subir**
-
-```bash
-php artisan serve --port=8080   # em um terminal
-npm run dev                     # em outro
-```
-
-Acesse `http://localhost:8080`.
-
-## Testes
+**3. Start**
 
 ```bash
-composer test       # backend (PHPUnit) + front-end (Vitest)
-composer test:php   # só o backend
-npm test            # só o front-end
+php artisan serve --port=8080   # one terminal
+npm run dev                     # another
 ```
 
-Os testes de backend exigem um banco `food_rescue_api_test` no mesmo PostgreSQL:
+Open `http://localhost:8080`.
 
-```bash
-docker exec food-rescue-postgres psql -U agro -d postgres -c "CREATE DATABASE food_rescue_api_test OWNER agro"
-```
-
-## Fluxo de uma operação
-
-```
-reserved → logística → waiting_payment → funded → ready_for_pickup
-        → in_transit → delivered → [proof_pending] → completed
-```
-
-Da reserva até `waiting_payment` tudo acontece pela interface. As etapas seguintes exigem transação assinada na Solana; a tela mostra quem assina e qual comando rodar:
+## On-chain layer
 
 ```bash
 cd solana && npm install
-npm run pagar       # cria a custódia e deposita o FRUSD
-npm run entregar    # coleta e entrega
-npm run liquidar    # libera produto, frete e taxa
+npm run pagar       # create the escrow and deposit FRUSD
+npm run entregar    # pickup and delivery
+npm run liquidar    # release product, freight and fee
 ```
 
-Esses comandos descobrem sozinhos a operação no estado certo. Os endereços do ambiente ficam em `solana/devnet.config.json`.
+Each command finds the trade sitting in the right state on its own. Environment addresses live in
+[`solana/devnet.config.json`](solana/devnet.config.json).
 
-> O ambiente é a **Devnet**. O token FRUSD é de teste e não tem valor monetário.
-
-O backend confere cada transação na RPC antes de mudar de estado, então o PHP precisa de um bundle de certificados válido (`curl.cainfo` no `php.ini`) — sem isso toda confirmação on-chain falha.
-
-## Documentação
-
-| Assunto | Onde |
+| | Devnet |
 |---|---|
-| Telas, rotas e organização do front | [www/docs/FRONTEND.md](www/docs/FRONTEND.md) |
-| Cadastro por tipo de ator | [www/docs/ACTOR_REGISTRATION.md](www/docs/ACTOR_REGISTRATION.md) |
-| Custódia e pagamento on-chain | [www/docs/BLOCKCHAIN_PAYMENTS.md](www/docs/BLOCKCHAIN_PAYMENTS.md) |
-| Doações e Proof of Rescue | [www/docs/DONATIONS_RESCUE_PROOF.md](www/docs/DONATIONS_RESCUE_PROOF.md) |
-| Estado da implementação | [www/docs/IMPLEMENTATION_STATUS.md](www/docs/IMPLEMENTATION_STATUS.md) |
-| Programa Solana e instruções | [solana/README.md](solana/README.md) |
-| Endereços e checkpoints da Devnet | [solana/devnet-e2e-state.md](solana/devnet-e2e-state.md) |
+| Program ID | `Ex6CN32gBUH2JALUwbqyn8ZMwWmBNrrHa4sjDNMAm5sd` |
+| FRUSD mint | `9tVPExJFkBU3yLgyo8fVzFVQj2t2boEESSpmoYikfxRr` |
+| Protocol fee | 200 bps (2%) on the product — freight goes 100% to the carrier |
+
+> **FRUSD does not represent real fiat currency.** MVP on Solana Devnet.
+
+## Tests
+
+```bash
+composer test       # backend (PHPUnit) + front-end (Vitest)
+composer test:php   # backend only
+npm test            # front-end only
+cd solana && cargo test
+```
+
+Backend tests need a `food_rescue_api_test` database:
+
+```bash
+docker exec food-rescue-postgres psql -U agro -d postgres \
+  -c "CREATE DATABASE food_rescue_api_test OWNER agro"
+```
+
+## Security
+
+- **No private key on the server.** The backend prepares instructions and verifies results.
+- **Wallet ownership via Ed25519 challenge** carrying a nonce, a purpose and an expiry — signatures
+  checked with `sodium_crypto_sign_verify_detached`.
+- **Every confirmation re-reads the chain**: PDA, owner, version, each state field, vault balance and
+  authority, and the amounts actually moved in the inner instructions.
+- **Signatures are never reusable**: a unique index on every recorded signature.
+- Open findings and priorities in [`www/docs/CODE_REVIEW.md`](www/docs/CODE_REVIEW.md).
+
+## Read more
+
+| Document | About |
+|---|---|
+| [Whitepaper](docs/WHITEPAPER.md) | Problem, thesis, protocol design, economics and impact |
+| [Yellowpaper](docs/YELLOWPAPER.md) | Technical specification: instructions, PDAs, byte layout, invariants |
+| [`www/docs/`](www/docs/) | Functional documentation per domain (registration, payments, logistics, donations) |
