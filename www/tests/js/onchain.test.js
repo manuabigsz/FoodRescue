@@ -91,8 +91,10 @@ describe('operação com custódia on-chain', () => {
         const botao = await waitFor('[data-panel-confirm]');
 
         expect(calls.some((call) => call.path === '/trades/10/delivery/ready-for-pickup/prepare')).toBe(true);
-        expect(document.querySelector('[data-action-panel]').textContent).toContain('produtor');
-        expect(botao.textContent).toContain('Assinar');
+        expect(document.querySelector('[data-action-panel]').textContent).toContain('lote está pronto');
+        expect(botao.textContent).toContain('Confirmar liberação');
+        expect(document.querySelector('[data-action-panel]').textContent).not.toContain('Programa');
+        expect(document.querySelector('[data-action-panel]').textContent).not.toContain('Custódia');
     });
 
     it('sem carteira no navegador o painel explica o que falta em vez de oferecer o botão', async () => {
@@ -211,7 +213,9 @@ describe('operação com custódia on-chain', () => {
 
         await click('[data-action="onchain-settlement"]');
 
-        expect((await waitFor('[data-panel-confirm]')).textContent).toContain('Assinar a liquidação');
+        expect((await waitFor('[data-panel-confirm]')).textContent).toContain('Finalizar e liberar valores');
+        expect(document.querySelector('.settlement-intro').textContent).toContain('valores protegidos serão liberados');
+        expect(document.querySelector('.settlement-intro').textContent).toContain('A entrega foi confirmada');
     });
 
     it('a instituição social abre o Proof of Rescue assinando sozinha', async () => {

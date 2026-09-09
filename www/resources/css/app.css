@@ -282,6 +282,14 @@ fieldset.field legend { padding: 0 .35rem; color: #4a5952; font-size: .79rem; fo
 .payment-intro { display: grid; gap: .35rem; margin-bottom: 1rem; padding: 1rem; border-radius: 14px; background: linear-gradient(135deg, #f2f8f2, #f8fbf7); border: 1px solid #dce9dd; }
 .payment-intro strong { color: var(--forest); font-size: 1.05rem; }
 .payment-intro p { margin: 0; color: var(--muted); }
+.settlement-intro { display: grid; gap: .35rem; margin-bottom: .75rem; padding: 1.05rem 1.1rem; border-radius: 14px; background: linear-gradient(135deg, #f2f8f2, #fbfcf8); border: 1px solid #dce9dd; }
+.settlement-intro .eyebrow { color: var(--forest); font-size: .7rem; letter-spacing: .09em; }
+.settlement-intro strong { color: var(--forest); font-size: 1.1rem; }
+.settlement-intro p { margin: 0; color: var(--muted); }
+.settlement-release-notice { display: flex; align-items: flex-start; gap: .75rem; margin-bottom: 1rem; padding: .9rem 1rem; border: 1px solid #e2c98f; border-radius: 13px; color: #6f561b; background: #fdf8e9; }
+.settlement-release-notice > span { display: grid; flex: 0 0 1.45rem; place-items: center; width: 1.45rem; height: 1.45rem; border-radius: 50%; color: #fff; background: #b78a24; font-weight: 800; }
+.settlement-release-notice strong { display: block; margin-bottom: .2rem; color: #5e4815; }
+.settlement-release-notice p { margin: 0; font-size: .88rem; }
 .payment-steps { display: grid; grid-template-columns: repeat(2, 1fr); gap: .65rem; margin-bottom: 1rem; }
 .payment-steps span { display: flex; align-items: center; gap: .5rem; padding: .7rem; border: 1px solid var(--line); border-radius: 10px; color: var(--muted); font-size: .84rem; }
 .payment-steps b { display: grid; place-items: center; width: 1.5rem; height: 1.5rem; border-radius: 50%; background: var(--forest); color: #fff; font-size: .75rem; }

@@ -382,15 +382,24 @@ export function deliveryPanel(titulo, descricao, operacao, papel) {
             return;
         }
 
+        const liberacaoDoProdutor = operacao === 'ready-for-pickup';
+        const confirmacaoDaColeta = operacao === 'pickup';
+        const confirmacaoDaEntrega = operacao === 'delivered';
         await signaturePanel(target, {
             titulo: titulo,
-            descricao: descricao + ' Quem assina: <strong>' + esc(papel) + '</strong>.',
+            descricao: liberacaoDoProdutor
+                ? 'Confirme que o lote está pronto, separado e disponível para a coleta. Depois desta confirmação, a operação avança e a transportadora poderá seguir com a retirada.'
+                : confirmacaoDaColeta
+                    ? 'Confirme que a coleta foi realizada e que a carga está sob sua responsabilidade. Depois desta confirmação, o acompanhamento seguirá para o transporte.'
+                : confirmacaoDaEntrega
+                    ? 'Confirme que você recebeu a carga e que o produto chegou ao destino. Depois desta confirmação, a operação poderá seguir para a etapa final.'
+                : descricao + ' Quem assina: <strong>' + esc(papel) + '</strong>.',
             preparation: preparation,
             instruction: preparation.instruction,
             wallet: preparation.wallet,
             papel: papel,
-            botao: 'Assinar na carteira',
-            resumo: [
+            botao: liberacaoDoProdutor ? 'Confirmar liberação' : confirmacaoDaColeta ? 'Confirmar coleta' : confirmacaoDaEntrega ? 'Confirmar entrega' : 'Assinar na carteira',
+            resumo: liberacaoDoProdutor || confirmacaoDaColeta || confirmacaoDaEntrega ? [] : [
                 ['Programa', preparation.program_id],
                 ['Custódia', preparation.trade_pda],
                 ['Carteira que assina', preparation.wallet],
@@ -422,18 +431,18 @@ export async function settlementPanel(trade, target) {
 
     await signaturePanel(target, {
         titulo: titulo,
-        descricao: 'A assinatura do destinatário libera o cofre: o produtor recebe o valor do produto menos a taxa, a tesouraria recebe a taxa e a transportadora recebe o frete.',
+        descricaoHtml: true,
+        descricao: '<div class="settlement-intro"><span class="eyebrow">ÚLTIMA ETAPA</span><strong>A entrega foi confirmada.</strong><p>Ao finalizar esta operação, os valores protegidos serão liberados automaticamente para cada participante.</p></div>' +
+            '<div class="settlement-release-notice"><span aria-hidden="true">✓</span><div><strong>O que acontece ao confirmar?</strong><p>O produtor recebe o valor do produto, a transportadora recebe o frete quando houver e a taxa do protocolo é encaminhada à tesouraria.</p></div></div>',
         preparation: preparation,
         instruction: preparation.settle_instruction,
         wallet: preparation.wallets?.buyer,
         papel: trade.is_donation ? 'instituição social' : 'comprador',
-        botao: 'Assinar a liquidação',
+        botao: 'Finalizar e liberar valores',
         resumo: [
-            ['Custódia', preparation.trade_pda],
-            ['Cofre', preparation.vault_token_account],
-            ['Produtor', preparation.wallets?.producer],
-            ['Tesouraria', preparation.wallets?.treasury],
-            ['Transportadora', preparation.wallets?.carrier],
+            ['Valor do produto', money(trade.product_amount) + ' FRUSD'],
+            ['Frete', Number(trade.shipping_amount) > 0 ? money(trade.shipping_amount) + ' FRUSD' : 'Sem frete'],
+            ['Total protegido', money(trade.buyer_total) + ' FRUSD'],
         ],
         run: async function (progress, carteira) {
             progress('Confirme a liquidação na carteira…');

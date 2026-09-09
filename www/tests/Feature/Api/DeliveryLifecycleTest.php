@@ -94,6 +94,12 @@ class DeliveryLifecycleTest extends TestCase
         $this->postJson('/api/v1/trades/'.$trade->id.'/delivery/pickup', ['signature' => Base58::encode(str_repeat(chr(42), 64))])
             ->assertOk()
             ->assertJsonPath('data.status', TradeStatus::InTransit->value);
+
+        Sanctum::actingAs($buyer);
+        $this->postEmptyJson('/api/v1/trades/'.$trade->id.'/delivery/delivered/prepare')->assertOk();
+        $this->postJson('/api/v1/trades/'.$trade->id.'/delivery/delivered', ['signature' => Base58::encode(str_repeat(chr(43), 64))])
+            ->assertOk()
+            ->assertJsonPath('data.status', TradeStatus::Delivered->value);
     }
 
     private function prepareChain(Trade $trade, User $producer, User $buyer, ?User $carrier = null): void

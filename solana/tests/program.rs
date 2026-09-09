@@ -503,6 +503,53 @@ fn com_transportadora_o_destinatario_nao_confirma_a_coleta() {
 }
 
 #[test]
+fn com_transportadora_o_destinatario_confirma_a_entrega() {
+    let program_id = key(9);
+    let (comprador, produtor, transportadora) = (key(1), key(2), key(3));
+    let (pda, bump) = trade_pda(&program_id, 42, &comprador);
+
+    let mut dados = vec![0u8; TradeState::LEN];
+    trade_state(
+        comprador,
+        produtor,
+        transportadora,
+        bump,
+        TradeState::STATUS_IN_TRANSIT,
+    )
+    .pack(&mut dados)
+    .unwrap();
+
+    avancar_entrega(&program_id, &comprador, &pda, &mut dados, 8).unwrap();
+
+    assert_eq!(
+        TradeState::unpack(&dados).unwrap().status,
+        TradeState::STATUS_DELIVERED
+    );
+}
+
+#[test]
+fn com_transportadora_a_transportadora_nao_confirma_a_entrega() {
+    let program_id = key(9);
+    let (comprador, produtor, transportadora) = (key(1), key(2), key(3));
+    let (pda, bump) = trade_pda(&program_id, 42, &comprador);
+
+    let mut dados = vec![0u8; TradeState::LEN];
+    trade_state(
+        comprador,
+        produtor,
+        transportadora,
+        bump,
+        TradeState::STATUS_IN_TRANSIT,
+    )
+    .pack(&mut dados)
+    .unwrap();
+
+    let resultado = avancar_entrega(&program_id, &transportadora, &pda, &mut dados, 8);
+
+    assert_eq!(resultado, Err(erro(FoodRescueError::InvalidAccount)));
+}
+
+#[test]
 fn a_transicao_recusa_um_pda_que_nao_vem_das_seeds() {
     let program_id = key(9);
     let (comprador, produtor) = (key(1), key(2));

@@ -66,6 +66,7 @@ impl Processor {
                 TradeState::STATUS_FUNDED,
                 TradeState::STATUS_READY_FOR_PICKUP,
                 false,
+                false,
             ),
             FoodRescueInstruction::ConfirmPickup => Self::advance_delivery(
                 program_id,
@@ -73,12 +74,14 @@ impl Processor {
                 TradeState::STATUS_READY_FOR_PICKUP,
                 TradeState::STATUS_IN_TRANSIT,
                 true,
+                false,
             ),
             FoodRescueInstruction::MarkDelivered => Self::advance_delivery(
                 program_id,
                 accounts,
                 TradeState::STATUS_IN_TRANSIT,
                 TradeState::STATUS_DELIVERED,
+                false,
                 true,
             ),
             FoodRescueInstruction::CreateRescueProof {
@@ -756,6 +759,7 @@ impl Processor {
         from: u8,
         to: u8,
         transport_actor: bool,
+        recipient_actor: bool,
     ) -> ProgramResult {
         let accounts_iter = &mut accounts.iter();
         let actor = next_account_info(accounts_iter)?;
@@ -785,7 +789,9 @@ impl Processor {
             return Err(FoodRescueError::InvalidPda.into());
         }
 
-        let expected_actor = if transport_actor {
+        let expected_actor = if recipient_actor {
+            state.buyer
+        } else if transport_actor {
             if state.carrier == Pubkey::default() {
                 state.buyer
             } else {

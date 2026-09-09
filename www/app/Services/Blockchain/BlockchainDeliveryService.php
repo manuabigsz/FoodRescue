@@ -149,6 +149,13 @@ class BlockchainDeliveryService
             return;
         }
 
+        if ($operation === 'delivered') {
+            abort_unless($actor->id === $trade->buyer_id
+                && $actor->hasRole($trade->is_donation ? UserRole::Ngo->value : UserRole::Buyer->value), 403);
+
+            return;
+        }
+
         $carrier = $trade->shippingRequest?->selectedOffer?->carrier;
         if ($carrier !== null) {
             abort_unless($actor->id === $carrier->id && $actor->hasRole(UserRole::Carrier->value), 403);

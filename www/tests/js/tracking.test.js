@@ -78,6 +78,21 @@ describe('acompanhamento de operações', () => {
         expect([...document.querySelectorAll('[data-action]')].map((b) => b.dataset.action)).toContain('pickup');
     });
 
+    it('o destinatário confirma a entrega mesmo com transportadora selecionada', async () => {
+        const shipping = {
+            status: 'selected',
+            origin: { city: 'Mogi das Cruzes', state: 'SP' },
+            destination: { city: 'Campinas', state: 'SP' },
+            selected_offer: { carrier: { id: carrier.id, name: carrier.name } },
+        };
+
+        await boot(buyer, [trade({ status: 'in_transit', shipping_request: shipping })]);
+        expect([...document.querySelectorAll('[data-action]')].map((b) => b.dataset.action)).toContain('delivered');
+
+        await boot(carrier, [trade({ status: 'in_transit', shipping_request: shipping })]);
+        expect([...document.querySelectorAll('[data-action]')].map((b) => b.dataset.action)).not.toContain('delivered');
+    });
+
     it('operação concluída não oferece cancelamento e oferece avaliação', async () => {
         await boot(buyer, [trade({ status: 'completed' })]);
 
