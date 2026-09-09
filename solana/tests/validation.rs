@@ -18,6 +18,7 @@ fn instruction_decoding_accepts_only_exact_lengths_for_all_tags() {
         (6, 1),
         (7, 1),
         (8, 1),
+        (9, 1),
     ] {
         let mut valid = vec![0; len];
         valid[0] = tag;

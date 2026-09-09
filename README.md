@@ -29,9 +29,10 @@ Everyone wants the same deal, and nobody can afford to trust first.
 
 ## The solution
 
-FoodRescue takes trust out of the equation. The buyer deposits into an **on-chain escrow**; the money
-sits in a vault that nobody controls — not even the platform. Release is automatic and atomic once
-delivery is confirmed: producer, carrier and protocol are all paid in the same transaction.
+The buyer deposits into an **on-chain escrow** governed by the program. The recipient confirms
+delivery, then signs a separate settlement transaction. Settlement pays the producer, carrier and
+protocol atomically. In donations with freight, the NGO is the recipient and pays only the freight.
+The program still has an upgrade authority; immutability remains a future deployment decision.
 
 ```
                      ┌──────────────────────────────────────┐
@@ -43,8 +44,9 @@ delivery is confirmed: producer, carrier and protocol are all paid in the same t
 ```
 
 **The backend never signs anything.** It assembles the instruction, hands it to the actor's own wallet
-(Phantom or compatible) to sign, and then **verifies the result on chain** byte for byte against what
-was promised. There is no private key on the server.
+(Phantom or compatible) to sign, and then verifies the transaction on chain. Verification coverage
+depends on the operation; the gaps are listed in the roadmap below. Laravel does not hold the actors'
+private keys.
 
 Five actors take part — producer, buyer, carrier, NGO and admin. What each one brings and receives is
 laid out in [section 4 of the Whitepaper](docs/WHITEPAPER-EN.pdf); which key signs which instruction
@@ -78,9 +80,14 @@ flowchart LR
 The happy path only. Branches — buyer-arranged pickup, cancellation, payment timeout — are in the
 Whitepaper.
 
-Everything up to `waiting_payment` happens in the UI. From there on, each step requires a transaction
-signed on Solana: the screen shows who signs and what. `proof_pending` only appears for donations with
-freight, where the NGO and the producer attest the rescue in two independent signatures.
+For trades with escrow, payment and delivery steps require transactions signed on Solana. The
+producer releases the lot, the carrier collects it (or the recipient for self-managed pickup), and
+the recipient confirms delivery and separately signs settlement. Donations with freight then await
+the NGO's and producer's independent Proof of Rescue signatures before completing in the application.
+
+Donations without freight skip escrow and enter `funded` in the database without a deposit. Their
+delivery steps run off-chain; opening the on-chain proof also moves them to `proof_pending`, and the
+producer's attestation completes the donation.
 
 ## Architecture
 
@@ -92,7 +99,7 @@ FoodRescue/
 │   └── tests/    PHPUnit (backend) + Vitest (front-end)
 ├── solana/       Native Rust program + devnet deploy and E2E scripts
 │   ├── src/      instruction.rs · processor.rs · state.rs (1,369 lines, zero Anchor)
-│   └── tests/    program.rs · validation.rs
+│   └── tests/    program.rs · validation.rs · settlement.rs
 └── docs/         Whitepaper and Yellowpaper
 ```
 
@@ -122,7 +129,8 @@ php artisan migrate --seed
 ```
 
 Seeding creates roles, permissions, the product catalogue and the administrator defined by
-`INITIAL_ADMIN_EMAIL` / `INITIAL_ADMIN_PASSWORD`. The initial admin password must be 15+ characters.
+`INITIAL_ADMIN_EMAIL` / `INITIAL_ADMIN_PASSWORD`. Use an initial admin password of 15+ characters;
+the current shared validator only enforces a minimum of 6, which is a pending hardening item.
 
 **3. Start**
 
@@ -169,14 +177,49 @@ docker exec food-rescue-postgres psql -U agro -d postgres \
   -c "CREATE DATABASE food_rescue_api_test OWNER agro"
 ```
 
+The Rust settlement tests cover recipient authorization, delivery before settlement, commercial
+trades with and without a carrier, freight-only donations, requested payouts and replay rejection.
+They capture SPL CPI instructions with syscall stubs; they do not execute SPL balance changes or
+prove transaction rollback in a validator. Donation proof confirmation remains a separate producer
+instruction. PHP E2E tests also require the recipient to confirm delivery and reject carrier
+confirmation. Browser tests have separate pending fixes listed below.
+
 ## Security
 
 - **No private key on the server.** The backend prepares instructions and verifies results.
 - **Wallet ownership via Ed25519 challenge** carrying a nonce, a purpose and an expiry — signatures
   checked with `sodium_crypto_sign_verify_detached`.
-- **Every confirmation re-reads the chain**: PDA, owner, version, each state field, vault balance and
-  authority, and the amounts actually moved in the inner instructions.
-- **Signatures are never reusable**: a unique index on every recorded signature.
+- **Transaction verification** checks confirmation, signers, program, instruction tag and length,
+  and the expected PDA among the accounts. Payment confirmations also validate trade and vault
+  state; delivery confirmations currently do not re-read that state.
+- **Transfer verification** inspects refund CPIs at cancellation. Settlement checks the prior vault
+  balance, final trade state and empty vault, but does not verify each beneficiary's transfer.
+- **Signature reuse checks** cover the transaction and initial rescue-proof signature columns.
+  Global uniqueness including the producer's proof signature is still pending.
+
+## Improvement roadmap
+
+These are future improvements identified by the documentation/code review on September 9, 2026.
+They are not guarantees of the current MVP. Within each phase, implementation should include
+regression tests and corresponding updates to the whitepaper, yellowpaper and their PDFs.
+
+| Priority | Improvement | Completion criteria |
+|---|---|---|
+| **P1 — verification** | Validate resulting delivery state and every settlement payout | Before updating the database, re-read and compare the expected Trade PDA state; verify SPL transfer source, authority, destination and amount for every beneficiary and surplus refund, including deposits earlier in the same transaction. |
+| **P1 — signatures** | Enforce global transaction-signature uniqueness | Include `blockchain_transactions.signature`, `rescue_proofs.signature` and `rescue_proofs.producer_signature` in one transactional uniqueness mechanism, with cross-operation and concurrent replay tests. |
+| **P1 — cancellation** | Complete funded cancellation in the browser | Allow buyer and producer to co-sign with a defined transaction-expiry/retry flow. Explain that cancellation requires both signatures when funded and is unavailable from `ready_for_pickup` onward. |
+| **P1 — publication** | Bind the publication signature to the lot's contents | Sign a canonical document or hash containing the lot terms, retain the signature and wallet with the published version, and require a new signature for changes to signed terms. |
+| **P1 — accounts** | Enforce the documented administrator password policy | Align the validator, seeder errors and documentation on the intended minimum, with boundary tests. |
+| **P2 — lifecycle and UI** | Align commercial and donation journeys across documentation, API and UI | Document separate delivery and recipient-signed settlement; show the no-freight donation branch and proof requirement; offer ratings only after `completed`; distinguish admin-controlled quotation/payment deadlines from producer-defined lot validity. |
+| **P2 — rescue proof** | Specify and verify the scope of rescue attestations | Explicitly distinguish a bilateral attestation from proof of physical delivery. Decide how proofs bind to delivered/settled trades on chain while retaining the no-escrow donation path; test both paths. |
+| **P2 — regression suite** | Repair frontend expectations and automate compatibility checks | Update the admin navigation expectation and investigate the missing signature button in the frontend test. Generate Rust fixtures and compare them with PHP fixtures in CI. |
+| **P3 — runtime and deployment** | Validate actual SPL execution and deployed artifacts | Run validator/runtime tests for funding, settlement, refunds and rollback on failed CPIs; reproduce the build and compare its artifact with the deployed program; record upgrade authority and mint/freeze authorities. These were not verified by the local review. |
+| **P3 — recovery and pilot** | Evaluate failure recovery and remaining trust assumptions | Test successful on-chain transactions whose API confirmation is lost, delayed RPC reads/reorganizations and wallet changes during active trades. Define recovery when the recipient does not confirm/settle or a donation proof remains pending, and evaluate dispute handling before a real pilot. |
+
+The review did not validate a real browser-wallet journey or a live Devnet financial cycle. A pilot
+also needs an operational review of secrets, backups/restoration and monitoring, plus assessment of
+actor isolation, CSP, identity and physical-delivery evidence. These are additional evaluation areas,
+not findings that those controls are necessarily absent.
 
 ## Read more
 

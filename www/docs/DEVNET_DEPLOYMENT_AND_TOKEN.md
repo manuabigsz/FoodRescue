@@ -29,7 +29,7 @@ Exemplo atual da Devnet:
 
 ```text
 Protocol Authority: 5wbZZiSzAbn7g8obEUJCQrdZTC7y6UrKuazvY7CVcu7T
-Treasury:           2WGhiqYXjw57REGfvjqJeQuxNXKz7QLjmU1txvhP58c
+Treasury:           2WGhiqYXjw57REGfvjqJeQuxNXKz7QLjmU1XtxvhP58c
 ```
 
 O endereço do deployer e o Program ID dependem dos keypairs locais.
@@ -80,7 +80,7 @@ O script está em [`../../solana/deploy-devnet.sh`](../../solana/deploy-devnet.s
 
 ```bash
 SOLANA_PROTOCOL_AUTHORITY=5wbZZiSzAbn7g8obEUJCQrdZTC7y6UrKuazvY7CVcu7T \
-SOLANA_PROTOCOL_TREASURY=2WGhiqYXjw57REGfvjqJeQuxNXKz7QLjmU1txvhP58c \
+SOLANA_PROTOCOL_TREASURY=2WGhiqYXjw57REGfvjqJeQuxNXKz7QLjmU1XtxvhP58c \
 DEPLOYER_KEYPAIR=/workspace/keypar/foodrescue-devnet-deployer.json \
 PROGRAM_KEYPAIR=/workspace/keypar/foodrescue-devnet-program.json \
 bash /workspace/deploy-devnet.sh
@@ -92,7 +92,7 @@ Para atualizar o mesmo programa depois de uma alteração compatível:
 
 ```bash
 SOLANA_PROTOCOL_AUTHORITY=5wbZZiSzAbn7g8obEUJCQrdZTC7y6UrKuazvY7CVcu7T \
-SOLANA_PROTOCOL_TREASURY=2WGhiqYXjw57REGfvjqJeQuxNXKz7QLjmU1txvhP58c \
+SOLANA_PROTOCOL_TREASURY=2WGhiqYXjw57REGfvjqJeQuxNXKz7QLjmU1XtxvhP58c \
 DEPLOYER_KEYPAIR=/workspace/keypar/foodrescue-devnet-deployer.json \
 PROGRAM_KEYPAIR=/workspace/keypar/foodrescue-devnet-program.json \
 bash /workspace/deploy-devnet.sh --allow-existing
@@ -121,7 +121,7 @@ SOLANA_COMMITMENT=confirmed
 SOLANA_PROGRAM_ID=PROGRAM_ID
 SOLANA_TOKEN_MINT=
 SOLANA_PROTOCOL_AUTHORITY=5wbZZiSzAbn7g8obEUJCQrdZTC7y6UrKuazvY7CVcu7T
-SOLANA_PROTOCOL_TREASURY=2WGhiqYXjw57REGfvjqJeQuxNXKz7QLjmU1txvhP58c
+SOLANA_PROTOCOL_TREASURY=2WGhiqYXjw57REGfvjqJeQuxNXKz7QLjmU1XtxvhP58c
 ```
 
 Depois limpe o cache:

@@ -130,10 +130,14 @@ class EndToEndValidationTest extends TestCase
             $this->chainStatus = 5;
             $this->tag = 7;
             $this->asActor($transport)->postJson($path.'/delivery/pickup', ['signature' => $this->signature()])->assertOk();
-            $this->asActor($transport)->postEmptyJson($path.'/delivery/delivered/prepare')->assertOk();
+            $this->asActor($transport)->postEmptyJson($path.'/delivery/delivered/prepare')->assertForbidden();
+            $this->asActor($recipient)->postEmptyJson($path.'/delivery/delivered/prepare')->assertOk()
+                ->assertJsonPath('data.wallet', $recipient->solana_wallet_address);
             $this->chainStatus = 6;
             $this->tag = 8;
-            $this->asActor($transport)->postJson($path.'/delivery/delivered', ['signature' => $this->signature()])->assertOk()->assertJsonPath('data.status', 'delivered');
+            $this->asActor($transport)->postJson($path.'/delivery/delivered', ['signature' => $this->signature()])->assertForbidden();
+            $this->assertDatabaseHas('trades', ['id' => $id, 'status' => 'in_transit']);
+            $this->asActor($recipient)->postJson($path.'/delivery/delivered', ['signature' => $this->signature()])->assertOk()->assertJsonPath('data.status', 'delivered');
         } else {
             $this->asActor($recipient)->postEmptyJson($path.'/delivery/delivered')->assertConflict();
             $this->asActor($producer)->postEmptyJson($path.'/delivery/ready-for-pickup')->assertOk();
@@ -234,7 +238,14 @@ class EndToEndValidationTest extends TestCase
             // As duas instruções do Proof of Rescue tiram os signatários da
             // preparação do proof; as demais, da preparação do trade.
             $wallets = in_array($this->tag, [5, 9], true) ? $proof['wallets'] : ($p['wallets'] ?? []);
-            $keys = array_map(fn ($wallet) => ['pubkey' => $wallet, 'signer' => true], array_values(array_filter($wallets)));
+            $signers = match ($this->tag) {
+                0, 1, 3, 8 => [$wallets['buyer'] ?? null],
+                4 => [$wallets['buyer'], $wallets['producer']],
+                5 => [$wallets['ngo']],
+                6, 9 => [$wallets['producer']],
+                7 => [$wallets['carrier'] ?? $wallets['buyer']],
+            };
+            $keys = array_map(fn ($wallet) => ['pubkey' => $wallet, 'signer' => in_array($wallet, $signers, true)], array_values(array_filter($wallets)));
             $vaultIndex = count($keys);
             $keys[] = ['pubkey' => $this->address(86), 'signer' => false];
             $instruction = match ($this->tag) {
