@@ -9,7 +9,9 @@ waste — with payment held in a Solana escrow that only releases against confir
 
 `Laravel 13` · `PHP 8.3+` · `PostgreSQL 17` · `Solana (native Rust, no Anchor)` · `Ed25519`
 
-[Whitepaper](docs/WHITEPAPER.md) · [Yellowpaper](docs/YELLOWPAPER.md) · [Domain docs](www/docs/) · [Code review](www/docs/CODE_REVIEW.md)
+**📄 [Whitepaper PDF](docs/WHITEPAPER-EN.pdf)** · **📄 [Yellowpaper PDF](docs/YELLOWPAPER-EN.pdf)**
+
+[Whitepaper](docs/WHITEPAPER.md) · [Yellowpaper](docs/YELLOWPAPER.md) · [Domain docs](www/docs/)
 
 </div>
 
@@ -178,12 +180,14 @@ docker exec food-rescue-postgres psql -U agro -d postgres \
 - **Every confirmation re-reads the chain**: PDA, owner, version, each state field, vault balance and
   authority, and the amounts actually moved in the inner instructions.
 - **Signatures are never reusable**: a unique index on every recorded signature.
-- Open findings and priorities in [`www/docs/CODE_REVIEW.md`](www/docs/CODE_REVIEW.md).
 
 ## Read more
 
-| Document | About |
-|---|---|
-| [Whitepaper](docs/WHITEPAPER.md) | Problem, thesis, protocol design, economics and impact |
-| [Yellowpaper](docs/YELLOWPAPER.md) | Technical specification: instructions, PDAs, byte layout, invariants |
-| [`www/docs/`](www/docs/) | Functional documentation per domain (registration, payments, logistics, donations) |
+| Document | About | |
+|---|---|---|
+| **Whitepaper** | Problem, thesis, protocol design, economics and impact | [PDF](docs/WHITEPAPER-EN.pdf) · [Markdown](docs/WHITEPAPER.md) |
+| **Yellowpaper** | Technical specification: instructions, PDAs, byte layout, invariants | [PDF](docs/YELLOWPAPER-EN.pdf) · [Markdown](docs/YELLOWPAPER.md) |
+| **Domain docs** | Functional documentation per domain (registration, payments, logistics, donations) | [`www/docs/`](www/docs/) |
+
+The PDFs are the typeset edition of the same content — hand them to people outside the repo. The
+Markdown is the source of truth: edit it, then regenerate the PDF.

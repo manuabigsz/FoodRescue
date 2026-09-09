@@ -486,6 +486,6 @@ the code from drifting apart silently.
 
 <div align="center">
 
-[← Whitepaper](WHITEPAPER.md) · [Functional documentation](../www/docs/) · [Code review](../www/docs/CODE_REVIEW.md)
+[← Whitepaper](WHITEPAPER.md) · [Functional documentation](../www/docs/)
 
 </div>
